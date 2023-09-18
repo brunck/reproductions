@@ -1,0 +1,25 @@
+﻿<?xml version="1.0" encoding="UTF-8" ?>
+<Application
+    x:Class="MauiRc1App.App"
+    xmlns="http://schemas.microsoft.com/dotnet/2021/maui"
+    xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml"
+    xmlns:local="clr-namespace:MauiRc1App">
+    <Application.Resources>
+        <ResourceDictionary>
+            <ResourceDictionary.MergedDictionaries>
+                <ResourceDictionary Source="Resources/Styles/Colors.xaml" />
+                <ResourceDictionary Source="Resources/Styles/Styles.xaml" />
+            </ResourceDictionary.MergedDictionaries>
+
+            <!--  Below lines cause the build error  -->
+            <Color x:Key="LightSmoke">#4FFFFFFF</Color>
+
+            <OnPlatform x:Key="EntryBackgroundColor" x:TypeArguments="Color">
+                <On Platform="iOS" Value="{StaticResource LightSmoke}" />
+                <On Platform="Android" Value="Transparent" />
+            </OnPlatform>
+            <!--  End lines  -->
+
+        </ResourceDictionary>
+    </Application.Resources>
+</Application>
