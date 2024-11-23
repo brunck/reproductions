@@ -39,7 +39,6 @@
 
 	<PropertyGroup Condition="$([MSBuild]::GetTargetPlatformIdentifier('$(TargetFramework)')) == 'android' and '$(Configuration)' != 'Debug'">
 		<AndroidEnableProguard>true</AndroidEnableProguard>
-		<!--<ProguardConfiguration>Platforms\Android\proguard-rules.pro</ProguardConfiguration>-->
 		<AndroidCreateProguardMappingFile>True</AndroidCreateProguardMappingFile>
 		<AndroidLinkTool>r8</AndroidLinkTool>
 	</PropertyGroup>
@@ -47,7 +46,6 @@
 	<PropertyGroup Condition="'$(Configuration)|$(TargetFramework)|$(Platform)'=='AdHoc|android|AnyCPU'">
 		<EmbedAssembliesIntoApk>True</EmbedAssembliesIntoApk>
 		<AndroidEnableProguard>true</AndroidEnableProguard>
-		<!--<ProguardConfiguration>Platforms\Android\proguard-rules.pro</ProguardConfiguration>-->
 		<AndroidCreateProguardMappingFile>True</AndroidCreateProguardMappingFile>
 		<AndroidLinkTool>r8</AndroidLinkTool>
 	</PropertyGroup>
