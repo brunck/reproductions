@@ -1,0 +1,147 @@
+﻿<metadata>
+	<!--******************* Removal *******************-->
+	
+	<remove-node path="/api/package[@name='com.datadog.android']/class[@name='_InternalProxy']" />
+	<remove-node path="/api/package[@name='com.datadog.android']/class[@name='_InternalProxy.Companion']" />
+	<remove-node path="/api/package[@name='com.datadog.android']/class[@name='_InternalProxy._TelemetryProxy']" />
+	<remove-node path="/api/package[@name='com.datadog.android']/class[@name='Datadog']/method[@name='_internalProxy']" />
+	<remove-node path="/api/package[@name='com.datadog.android']/class[@name='Datadog']/field[@name='INSTANCE']" />
+	<remove-node path="/api/package[@name='com.datadog.android']/class[@name='BuildConfig']" />
+	<remove-node path="/api/package[@name='com.datadog.android']/class[@name='Datadog']/method[@name='setUserInfoDeprecated']" />
+
+	<remove-node path="/api/package[@name='com.datadog.android.event']/class[@name='MapperSerializer']" />
+	
+	<remove-node path="/api/package[@name='com.datadog.android.api']/interface[@name='InternalLogger']" />
+	<remove-node path="/api/package[@name='com.datadog.android.api']/class[@name='InternalLogger.Companion']" />
+	<remove-node path="/api/package[@name='com.datadog.android.api']/class[@name='InternalLogger.DefaultImpls']" />
+	<remove-node path="/api/package[@name='com.datadog.android.api']/class[@name='InternalLogger.Level']" />
+	<remove-node path="/api/package[@name='com.datadog.android.api']/class[@name='InternalLogger.Target']" />
+	<remove-node path="/api/package[@name='com.datadog.android.api']/class[@name='SdkCore.DefaultImpls']" />
+	<remove-node path="/api/package[@name='com.datadog.android.api.context']/class[@name='DatadogContext']/method[starts-with(@name,'component')]" />
+	<remove-node path="/api/package[@name='com.datadog.android.api.context']/class[@name='DeviceInfo']/method[starts-with(@name,'component')]" />
+	<remove-node path="/api/package[@name='com.datadog.android.api.context']/class[@name='NetworkInfo.Connectivity']/method[@name='fromJson']" />
+	<remove-node path="/api/package[@name='com.datadog.android.api.context']/class[@name='NetworkInfo.Connectivity']/field[@name='Companion']" />
+	<remove-node path="/api/package[@name='com.datadog.android.api.context']/class[@name='NetworkInfo']/method[@name='fromJson']" />
+	<remove-node path="/api/package[@name='com.datadog.android.api.context']/class[@name='NetworkInfo']/method[@name='fromJsonObject']" />
+	<remove-node path="/api/package[@name='com.datadog.android.api.context']/class[@name='NetworkInfo']/field[@name='Companion']" />
+	<remove-node path="/api/package[@name='com.datadog.android.api.context']/class[@name='NetworkInfo']/method[starts-with(@name,'component')]" />
+	<remove-node path="/api/package[@name='com.datadog.android.api.context']/class[@name='ProcessInfo']/method[@name='component1']" />
+	<remove-node path="/api/package[@name='com.datadog.android.api.context']/class[@name='TimeInfo']/method[@name='component1']" />
+	<remove-node path="/api/package[@name='com.datadog.android.api.context']/class[@name='TimeInfo']/method[@name='component2']" />
+	<remove-node path="/api/package[@name='com.datadog.android.api.context']/class[@name='TimeInfo']/method[@name='component3']" />
+	<remove-node path="/api/package[@name='com.datadog.android.api.context']/class[@name='TimeInfo']/method[@name='component4']" />
+	<remove-node path="/api/package[@name='com.datadog.android.api.context']/class[@name='UserInfo']/field[@name='Companion']" />
+	<remove-node path="/api/package[@name='com.datadog.android.api.context']/class[@name='UserInfo']/method[starts-with(@name,'component')]" />
+>
+	<remove-node path="/api/package[@name='com.datadog.android.api.feature']/class[@name='FeatureScopeExtKt']" />
+	<remove-node path="/api/package[@name='com.datadog.android.api.feature']/interface[@name='FeatureSdkCore']/method[@name='getInternalLogger']" />
+	<remove-node path="/api/package[@name='com.datadog.android.api.net']/class[@name='Request']/method[starts-with(@name,'component')]" />
+	<remove-node path="/api/package[@name='com.datadog.android.api.storage']/interface[@name='DataWriter']" />
+	<remove-node path="/api/package[@name='com.datadog.android.api.storage']/class[@name='NoOpDataWriter']" />
+	<remove-node path="/api/package[@name='com.datadog.android.api.storage']/interface[@name='EventBatchWriter']" />
+	<remove-node path="/api/package[@name='com.datadog.android.api.storage']/class[@name='EventType']" />
+	<remove-node path="/api/package[@name='com.datadog.android.api.storage']/class[@name='FeatureStorageConfiguration.Companion']" />
+	<remove-node path="/api/package[@name='com.datadog.android.api.storage']/class[@name='FeatureStorageConfiguration']" />
+	<remove-node path="/api/package[@name='com.datadog.android.api.storage']/class[@name='RawBatchEvent.Companion']" />
+	<remove-node path="/api/package[@name='com.datadog.android.api.storage']/class[@name='RawBatchEvent']" />
+	
+	<remove-node path="/api/package[@name='com.datadog.android.core']/class[@name='InternalSdkCore.DefaultImpls']" />
+	<remove-node path="/api/package[@name='com.datadog.android.core']/interface[@name='InternalSdkCore']" />
+	<remove-node path="/api/package[@name='com.datadog.android.core']/class[@name='SdkReference.1']" />
+	<remove-node path="/api/package[@name='com.datadog.android.core']/class[@name='SdkReference']" />
+	<remove-node path="/api/package[@name='com.datadog.android.core']/class[@name='StrictModeExtKt']" />
+	<remove-node path="/api/package[@name='com.datadog.android.core']/class[@name='UploadWorker']" />
+	
+	<remove-node path="/api/package[@name='com.datadog.android.core.configuration']/class[@name='HostsSanitizer.Companion']" />
+	<remove-node path="/api/package[@name='com.datadog.android.core.configuration']/class[@name='HostsSanitizer']" />
+	<remove-node path="/api/package[@name='com.datadog.android.core.configuration']/class[@name='Configuration']/field[@name='Companion']" />
+	<remove-node path="/api/package[@name='com.datadog.android.core.configuration']/class[@name='Configuration.Companion']" />
+	
+	<remove-node path="/api/package[@name='com.datadog.android.core.configuration']/class[@name='BackPressureStrategy']/method[@name='component1']" />
+	<remove-node path="/api/package[@name='com.datadog.android.core.configuration']/class[@name='BackPressureStrategy']/method[@name='component2']" />
+	<remove-node path="/api/package[@name='com.datadog.android.core.configuration']/class[@name='BackPressureStrategy']/method[@name='component3']" />
+	<remove-node path="/api/package[@name='com.datadog.android.core.configuration']/class[@name='BackPressureStrategy']/method[@name='component4']" />
+	
+	<remove-node path="/api/package[@name='com.datadog.android.core.constraints']/class[@name='DatadogDataConstraints.Companion']" />
+	<remove-node path="/api/package[@name='com.datadog.android.core.constraints']/class[@name='DatadogDataConstraints']/field[@name='Companion']" />
+	<remove-node path="/api/package[@name='com.datadog.android.core.constraints']/class[@name='DatadogDataConstraints']" />
+	<remove-node path="/api/package[@name='com.datadog.android.core.constraints']/class[@name='DataConstraints.DefaultImpls']" />
+	<remove-node path="/api/package[@name='com.datadog.android.error.internal']" />
+	
+	<remove-node path="/api/package[@name='com.datadog.android.event']/class[@name='NoOpEventMapper']" />
+	
+	<remove-node path="/api/package[@name='com.datadog.android.core.feature.event']/class[@name='JvmCrash.Logs']" />
+	<remove-node path="/api/package[@name='com.datadog.android.core.feature.event']/class[@name='JvmCrash.Rum']" />
+	<remove-node path="/api/package[@name='com.datadog.android.core.feature.event']/class[@name='JvmCrash']" />
+	<remove-node path="/api/package[@name='com.datadog.android.core.feature.event']/class[@name='ThreadDump']" />
+	
+	<remove-node path="/api/package[@name='com.datadog.android.core.internal.attributes']" />
+	<remove-node path="/api/package[starts-with(@name,'com.datadog.android.core.internal')]" />
+
+	<remove-node path="/api/package[@name='com.datadog.android.lint']/interface[@name='InternalApi']" />
+	
+	<remove-node path="/api/package[@name='com.datadog.android.core.metrics']/class[@name='PerformanceMetric.Companion']" />
+	<remove-node path="/api/package[@name='com.datadog.android.core.metrics']/interface[@name='PerformanceMetric']" />
+	
+	<remove-node path="/api/package[@name='com.datadog.android.ndk.internal']" />
+	
+	<remove-node path="/api/package[@name='com.datadog.android.core.persistence']/class[@name='SerializerKt']" />
+	<remove-node path="/api/package[@name='com.datadog.android.core.persistence']/interface[@name='Serializer']/field[@name='Companion']" />
+	<remove-node path="/api/package[@name='com.datadog.android.core.persistence']/class[@name='Serializer.Companion']" />
+	<remove-node path="/api/package[@name='com.datadog.android.core.persistence']/interface[@name='PersistenceStrategy']/method[@name='currentMetadata']" />
+	<remove-node path="/api/package[@name='com.datadog.android.core.persistence']/interface[@name='PersistenceStrategy']/method[@name='dropAll']" />
+	<remove-node path="/api/package[@name='com.datadog.android.core.persistence']/interface[@name='PersistenceStrategy']/method[@name='lockAndReadNext']" />
+	<remove-node path="/api/package[@name='com.datadog.android.core.persistence']/interface[@name='PersistenceStrategy']/method[@name='migrateData']" />
+	<remove-node path="/api/package[@name='com.datadog.android.core.persistence']/interface[@name='PersistenceStrategy']/method[@name='unlockAndDelete']" />
+	<remove-node path="/api/package[@name='com.datadog.android.core.persistence']/interface[@name='PersistenceStrategy']/method[@name='unlockAndKeep']" />
+	<remove-node path="/api/package[@name='com.datadog.android.core.persistence']/interface[@name='PersistenceStrategy']/method[@name='write']" />
+	<remove-node path="/api/package[@name='com.datadog.android.core.persistence']/interface[@name='PersistenceStrategy.Factory']/method[@name='create']" />
+	<remove-node path="/api/package[@name='com.datadog.android.core.persistence']/class[@name='PersistenceStrategy.Batch']" />
+
+	<remove-node path="/api/package[@name='com.datadog.android.core.thread']" />
+	
+	<remove-node path="/api/package[@name='com.datadog.tools.annotation']/interface[@name='NoOpImplementation']" />
+	
+	<!--******************* Renaming *******************-->
+	
+	<attr path="/api/package[@name='com.datadog.android']/class[@name='DatadogSite']/field[@name='AP1']" name="managedName">AP1</attr>
+	<attr path="/api/package[@name='com.datadog.android']/class[@name='DatadogSite']/field[@name='EU1']" name="managedName">EU1</attr>
+	<attr path="/api/package[@name='com.datadog.android']/class[@name='DatadogSite']/field[@name='US1']" name="managedName">US1</attr>
+	<attr path="/api/package[@name='com.datadog.android']/class[@name='DatadogSite']/field[@name='US3']" name="managedName">US3</attr>
+	<attr path="/api/package[@name='com.datadog.android']/class[@name='DatadogSite']/field[@name='US5']" name="managedName">US5</attr>
+	<attr path="/api/package[@name='com.datadog.android']/class[@name='DatadogSite']/field[@name='US1_FED']" name="managedName">US1_Fed</attr>
+	
+	<attr path="/api/package[@name='com.datadog.android.core.configuration']/class[@name='Configuration']" name="managedName">DDConfiguration</attr>
+	
+	<attr path="/api/package[@name='com.datadog.android.core.configuration']" name="managedName">Datadog.Android.Core.Configuration</attr>
+	
+	<attr path="/api/package[@name='com.datadog.android.core.configuration']/class[@name='BackPressureStrategy']/method[@name='getOnItemDropped']" name="managedName">OnItemDroppedInterop</attr>
+	<attr path="/api/package[@name='com.datadog.android.core.configuration']/class[@name='BackPressureStrategy']/method[@name='getOnItemDropped']" name="visibility">private</attr>
+	
+	<attr  path="/api/package[@name='com.datadog.android.core.configuration']/class[@name='BackPressureStrategy']/method[@name='getOnThresholdReached']" name="managedName">OnThresholdReachedInterop</attr>
+	<attr  path="/api/package[@name='com.datadog.android.core.configuration']/class[@name='BackPressureStrategy']/method[@name='getOnThresholdReached']" name="visibility">private</attr>
+	
+	<attr path="/api/package[@name='com.datadog.android.core.configuration']/class[@name='BackPressureStrategy']/method[@name='copy']" name="managedName">CopyInterop</attr>
+	<attr path="/api/package[@name='com.datadog.android.core.configuration']/class[@name='BackPressureStrategy']/method[@name='copy']" name="visibility">private</attr>
+
+	<attr
+		path="/api/package[@name='com.datadog.android.core.configuration']/class[@name='BackPressureStrategy']/constructor[@name='BackPressureStrategy' and count(parameter)=4 and parameter[1][@type='int'] and parameter[2][@type='kotlin.jvm.functions.Function0&lt;kotlin.Unit&gt;'] and parameter[3][@type='kotlin.jvm.functions.Function1&lt;java.lang.Object, kotlin.Unit&gt;'] and parameter[4][@type='com.datadog.android.core.configuration.BackPressureMitigation']]"
+		name="visibility">internal</attr>
+
+	<attr
+		path="/api/package[@name='com.datadog.android.core.sampling']/class[@name='RateBasedSampler']/constructor[@name='RateBasedSampler' and count(parameter)=1 and parameter[1][@type='kotlin.jvm.functions.Function0&lt;java.lang.Float&gt;']]"
+		name="visibility">internal</attr>
+
+	<attr path="/api/package[@name='com.datadog.android.log']/class[@name='LogAttributes']/field[@name='DD_SPAN_ID']" name="managedName">DDSpanId</attr>
+	<attr path="/api/package[@name='com.datadog.android.log']/class[@name='LogAttributes']/field[@name='DD_TRACE_ID']" name="managedName">DDTraceId</attr>
+	
+	<attr path="/api/package[@name='com.datadog.android.trace']/class[@name='TracingHeaderType']/field[@name='B3MULTI']" name="managedName">B3Multi</attr>
+	<attr path="/api/package[@name='com.datadog.android.trace']/class[@name='TracingHeaderType']/field[@name='TRACECONTEXT']" name="managedName">TraceContext</attr>
+	
+	<attr path="/api/package[@name='com.datadog.android.event']/interface[@name='EventMapper']" name="managedName">IEventMapperBase</attr>
+	<attr path="/api/package[@name='com.datadog.android.api']/interface[@name='SdkCore']/method[@name='isCoreActive']" name="managedName">IsCoreActive</attr>
+	<attr path="/api/package[@name='com.datadog.android.core.sampling']/class[@name='DeterministicSampler']/constructor[@name='DeterministicSampler' and count(parameter)=2 and parameter[1][@type='kotlin.jvm.functions.Function1&lt;? super T, kotlin.ULong&gt;'] and parameter[2][@type='double']]"
+	name="visibility">internal</attr>
+	<attr path="/api/package[@name='com.datadog.android.core.sampling']/class[@name='DeterministicSampler']/constructor[@name='DeterministicSampler' and count(parameter)=2 and parameter[1][@type='kotlin.jvm.functions.Function1&lt;? super T, kotlin.ULong&gt;'] and parameter[2][@type='float']]" name="visibility">internal</attr>
+	<attr path="/api/package[@name='com.datadog.android.core.sampling']/class[@name='DeterministicSampler']/constructor[@name='DeterministicSampler' and count(parameter)=2 and parameter[1][@type='kotlin.jvm.functions.Function1&lt;? super T, kotlin.ULong&gt;'] and parameter[2][@type='kotlin.jvm.functions.Function0&lt;java.lang.Float&gt;']]" name="visibility">internal</attr>
+</metadata>

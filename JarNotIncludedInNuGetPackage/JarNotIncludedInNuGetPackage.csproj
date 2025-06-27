@@ -1,0 +1,32 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <TargetFrameworks>net8.0-android;net9.0-android</TargetFrameworks>
+    <SupportedOSPlatformVersion>26</SupportedOSPlatformVersion>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <IsBindingProject>true</IsBindingProject>
+    <!--
+      Enable trim analyzers for Android class libraries.
+      To learn more, see: https://learn.microsoft.com/dotnet/core/deploying/trimming/prepare-libraries-for-trimming
+    -->
+    <IsTrimmable>true</IsTrimmable>
+    <!--
+      NOTE: you can simply add .aar or .jar files in this directory to be included in the project.
+      To learn more, see: https://learn.microsoft.com/dotnet/maui/migration/android-binding-projects
+    -->
+  </PropertyGroup>
+  <PropertyGroup>
+    <PackageId>com.yourcompany.SomeAndroidBinding</PackageId>
+    <GeneratePackageOnBuild>true</GeneratePackageOnBuild>
+  </PropertyGroup>
+  <ItemGroup>
+		<PackageReference Include="GoogleGson" Version="2.10.1.11" />
+		<PackageReference Include="Square.OkHttp3" Version="4.12.0" />
+		<PackageReference Include="Xamarin.AndroidX.Work.Runtime" Version="2.8.1" />
+	</ItemGroup>
+  <ItemGroup>
+		<AndroidLibrary Update="aars\dd-sdk-android-core-release.aar" />
+		<AndroidLibrary Update="aars\kronos-java-0.0.1-alpha11.jar" Bind="false" />
+		<AndroidLibrary Update="aars\kronos-android-0.0.1-alpha11.aar" Bind="false" />
+	</ItemGroup>
+</Project>
