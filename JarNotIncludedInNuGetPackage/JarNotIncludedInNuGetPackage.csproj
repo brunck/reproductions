@@ -1,6 +1,6 @@
 <Project Sdk="Microsoft.NET.Sdk">
   <PropertyGroup>
-    <TargetFrameworks>net8.0-android;net9.0-android</TargetFrameworks>
+    <TargetFramework>net9.0-android</TargetFramework>
     <SupportedOSPlatformVersion>26</SupportedOSPlatformVersion>
     <Nullable>enable</Nullable>
     <ImplicitUsings>enable</ImplicitUsings>
@@ -14,6 +14,7 @@
       NOTE: you can simply add .aar or .jar files in this directory to be included in the project.
       To learn more, see: https://learn.microsoft.com/dotnet/maui/migration/android-binding-projects
     -->
+      <JavaSdkDirectory>$(JAVA_HOME)</JavaSdkDirectory>
   </PropertyGroup>
   <PropertyGroup>
     <PackageId>com.yourcompany.SomeAndroidBinding</PackageId>
