@@ -1,0 +1,159 @@
+﻿<?xml version="1.0" encoding="utf-8" ?>
+<ContentPage
+    x:Class="SfListViewResetLeakRepro.MainPage"
+    xmlns="http://schemas.microsoft.com/dotnet/2021/maui"
+    xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml"
+    xmlns:listView="clr-namespace:Syncfusion.Maui.ListView;assembly=Syncfusion.Maui.ListView"
+    xmlns:pullToRefresh="clr-namespace:Syncfusion.Maui.PullToRefresh;assembly=Syncfusion.Maui.PullToRefresh"
+    xmlns:sfListViewResetLeakRepro="clr-namespace:SfListViewResetLeakRepro"
+    x:DataType="sfListViewResetLeakRepro:MainViewModel">
+
+    <ContentPage.Resources>
+        <DataTemplate x:Key="PrimaryRowTemplate">
+            <Grid Padding="6" x:DataType="sfListViewResetLeakRepro:RowItem">
+                <Border Padding="0" Stroke="Transparent">
+                    <!-- Two-layer StackLayout to mimic dashboard-ish visual nesting -->
+                    <StackLayout>
+                        <StackLayout>
+                            <Grid Padding="10" ColumnDefinitions="Auto,*" RowDefinitions="Auto,Auto">
+                                <Label Grid.RowSpan="2" Text="●" VerticalOptions="Center" />
+
+                                <StackLayout Grid.Column="1" Spacing="0">
+                                    <Label Text="{Binding Text}">
+                                        <Label.Behaviors>
+                                            <x:Static Member="sfListViewResetLeakRepro:SharedLabelBehavior.Instance" />
+                                        </Label.Behaviors>
+                                        <Label.Triggers>
+                                            <DataTrigger TargetType="Label" Binding="{Binding DetailsVisible}" Value="True">
+                                                <Setter Property="FontAttributes" Value="Bold" />
+                                            </DataTrigger>
+                                        </Label.Triggers>
+                                    </Label>
+
+                                    <Grid>
+                                        <VerticalStackLayout x:Name="FrontView" IsVisible="True" Spacing="6">
+                                            <VerticalStackLayout.Triggers>
+                                                <DataTrigger TargetType="VerticalStackLayout" Binding="{Binding DetailsVisible}" Value="True">
+                                                    <Setter Property="IsVisible" Value="False" />
+                                                </DataTrigger>
+                                            </VerticalStackLayout.Triggers>
+                                            <Label FontSize="12" Text="Front view" />
+                                        </VerticalStackLayout>
+
+                                        <VerticalStackLayout x:Name="BackView" IsVisible="False" Spacing="6">
+                                            <VerticalStackLayout.Triggers>
+                                                <DataTrigger TargetType="VerticalStackLayout" Binding="{Binding DetailsVisible}" Value="True">
+                                                    <Setter Property="IsVisible" Value="True" />
+                                                </DataTrigger>
+                                            </VerticalStackLayout.Triggers>
+                                            <Label FontSize="12" Text="Back view" />
+                                        </VerticalStackLayout>
+                                    </Grid>
+
+                                    <VerticalStackLayout BindableLayout.ItemsSource="{Binding Details}" IsVisible="{Binding DetailsVisible}">
+                                        <BindableLayout.ItemTemplate>
+                                            <DataTemplate x:DataType="x:String">
+                                                <Label FontSize="12" Text="{Binding .}">
+                                                    <Label.Behaviors>
+                                                        <x:Static Member="sfListViewResetLeakRepro:SharedLabelBehavior.Instance" />
+                                                    </Label.Behaviors>
+                                                </Label>
+                                            </DataTemplate>
+                                        </BindableLayout.ItemTemplate>
+                                    </VerticalStackLayout>
+                                </StackLayout>
+                            </Grid>
+                        </StackLayout>
+                    </StackLayout>
+                </Border>
+            </Grid>
+        </DataTemplate>
+
+        <DataTemplate x:Key="AlternateRowTemplate">
+            <Grid Padding="6" BackgroundColor="LightGray" x:DataType="sfListViewResetLeakRepro:RowItem">
+                <Border Padding="0" Stroke="Transparent">
+                    <!-- Two-layer StackLayout to mimic dashboard-ish visual nesting -->
+                    <StackLayout>
+                        <StackLayout>
+                            <Grid Padding="10" ColumnDefinitions="Auto,*" RowDefinitions="Auto,Auto">
+                                <Label Grid.RowSpan="2" Text="○" VerticalOptions="Center" />
+
+                                <StackLayout Grid.Column="1" Spacing="0">
+                                    <Label Text="{Binding Text}">
+                                        <Label.Behaviors>
+                                            <x:Static Member="sfListViewResetLeakRepro:SharedLabelBehavior.Instance" />
+                                        </Label.Behaviors>
+                                        <Label.Triggers>
+                                            <DataTrigger TargetType="Label" Binding="{Binding DetailsVisible}" Value="True">
+                                                <Setter Property="FontAttributes" Value="Bold" />
+                                            </DataTrigger>
+                                        </Label.Triggers>
+                                    </Label>
+
+                                    <Label FontSize="12" Text="(alternate template)" />
+                                </StackLayout>
+                            </Grid>
+                        </StackLayout>
+                    </StackLayout>
+                </Border>
+            </Grid>
+        </DataTemplate>
+
+		<sfListViewResetLeakRepro:RowTemplateSelector
+			x:Key="RowTemplateSelector"
+            PrimaryTemplate="{StaticResource PrimaryRowTemplate}"
+            AlternateTemplate="{StaticResource AlternateRowTemplate}" />
+    </ContentPage.Resources>
+
+    <Grid Padding="12" RowDefinitions="Auto,*" RowSpacing="8">
+        <VerticalStackLayout Grid.Row="0" Spacing="8">
+            <Button Command="{Binding RunGcCommand}" Text="Run GC" />
+            <Button Clicked="OnListDiagnosticsClicked" Text="List diagnostics" />
+            <Label Text="{Binding RefreshCount, StringFormat='Refreshes: {0}'}" />
+        </VerticalStackLayout>
+
+        <pullToRefresh:SfPullToRefresh
+            Grid.Row="1"
+            HorizontalOptions="Fill"
+            IsRefreshing="{Binding IsRefreshing}"
+            PullingThreshold="75"
+            RefreshCommand="{Binding RefreshCommand}">
+
+            <pullToRefresh:SfPullToRefresh.PullableContent>
+                <listView:SfListView
+                    x:Name="LeakListView"
+                    AutoFitMode="DynamicHeight"
+                    BackgroundColor="Transparent"
+                    CachingStrategy="CreateNewTemplate"
+                    HorizontalOptions="Fill"
+                    ItemTemplate="{StaticResource RowTemplateSelector}"
+                    ItemsSource="{Binding Items}"
+                    SelectionBackground="Transparent"
+                    SelectionMode="Single">
+
+                    <listView:SfListView.DragItemTemplate>
+                        <DataTemplate x:DataType="sfListViewResetLeakRepro:RowItem">
+                            <Grid Padding="12">
+                                <Label Text="{Binding Text}" />
+                            </Grid>
+                        </DataTemplate>
+                    </listView:SfListView.DragItemTemplate>
+
+                    <listView:SfListView.FooterTemplate>
+                        <DataTemplate>
+                            <VerticalStackLayout Margin="0,20,0,20" HorizontalOptions="Center">
+                                <Label Text="Footer">
+                                    <Label.GestureRecognizers>
+                                        <TapGestureRecognizer Tapped="OnFooterTapped" />
+                                    </Label.GestureRecognizers>
+                                </Label>
+                            </VerticalStackLayout>
+                        </DataTemplate>
+                    </listView:SfListView.FooterTemplate>
+
+                </listView:SfListView>
+            </pullToRefresh:SfPullToRefresh.PullableContent>
+        </pullToRefresh:SfPullToRefresh>
+    </Grid>
+
+</ContentPage>
