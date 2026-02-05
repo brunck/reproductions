@@ -1,0 +1,47 @@
+﻿<?xml version="1.0" encoding="utf-8" ?>
+<ContentPage xmlns="http://schemas.microsoft.com/dotnet/2021/maui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml"
+             x:Class="MauiTabbedModalLeakRepro.MainPage"
+             Title="Leak Repro">
+
+    <ScrollView>
+        <VerticalStackLayout
+            Padding="20"
+            Spacing="12">
+            <Label
+                Text="MAUI TabbedPage Modal Leak Repro"
+                Style="{StaticResource Headline}"
+                SemanticProperties.HeadingLevel="Level1" />
+
+            <Label
+                Text="Runs a modal TabbedPage loop and tracks WeakReferences after a forced GC."
+                Style="{StaticResource SubHeadline}"
+                FontSize="12" />
+
+
+            <HorizontalStackLayout Spacing="12">
+                <Label Text="Iterations" VerticalOptions="Center" />
+                <Stepper x:Name="IterationsStepper"
+                         Minimum="1"
+                         Maximum="25"
+                         Increment="1"
+                         ValueChanged="OnIterationsChanged" />
+                <Label x:Name="IterationsLabel" VerticalOptions="Center" />
+            </HorizontalStackLayout>
+
+            <HorizontalStackLayout Spacing="12" VerticalOptions="Center">
+                <Label Text="Wrap tabs in NavigationPage" VerticalOptions="Center" />
+                <Switch x:Name="WrapTabsSwitch" IsToggled="True" />
+            </HorizontalStackLayout>
+
+            <Button Text="Run repro once" Clicked="OnRunOnceClicked" />
+            <Button Text="Run repro N times" Clicked="OnRunNTimesClicked" />
+            <Button Text="Clear tracked refs" Clicked="OnClearTrackedClicked" />
+            <Button Text="Force GC (before / after)" Clicked="OnForceGcClicked" />
+
+            <Label Text="Status" FontAttributes="Bold" />
+            <Label x:Name="StatusLabel" FontSize="12" />
+        </VerticalStackLayout>
+    </ScrollView>
+
+</ContentPage>
