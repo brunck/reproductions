@@ -3,11 +3,11 @@
 ## Goal
 Minimal .NET MAUI app that demonstrates managed leak when repeatedly opening and closing a modal `TabbedPage` (with optional per-tab `NavigationPage` wrappers). Primary signal is in-app `WeakReference` tracking + forced GC; optional gcdump script is included for deeper analysis.
 
-## Environment (fill in)
+## Environment
 - SDK: 10.0.102 (see [global.json](global.json))
 - MAUI workload version: 10.0.102
-- Device/emulator: 
-- Android API level: 
+- Device/emulator: Google Pixel 8a
+- Android API level: 36
 
 ## Repro Steps
 1. Build/deploy to Android.
