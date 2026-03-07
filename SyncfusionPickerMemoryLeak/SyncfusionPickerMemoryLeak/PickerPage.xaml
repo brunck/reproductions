@@ -1,0 +1,50 @@
+<?xml version="1.0" encoding="utf-8" ?>
+<ContentPage
+    x:Class="SyncfusionPickerMemoryLeak.PickerPage"
+    xmlns="http://schemas.microsoft.com/dotnet/2021/maui"
+    xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml"
+    xmlns:local="clr-namespace:SyncfusionPickerMemoryLeak"
+    Title="Timers">
+
+    <ScrollView>
+        <VerticalStackLayout Padding="16" Spacing="12">
+            <Label
+                FontAttributes="Bold"
+                FontSize="16"
+                HorizontalOptions="Center"
+                Text="Timer Settings" />
+
+            <Label
+                FontSize="12"
+                HorizontalOptions="Center"
+                HorizontalTextAlignment="Center"
+                Text="Two dialog-mode SfPicker instances with ViewModel bindings and SelectionChanged handlers, mirroring production DeviceSettingsPage."
+                TextColor="DarkSlateGray" />
+
+            <Label FontAttributes="Bold" FontSize="14" Text="Override Timer:" />
+            <Button
+                Clicked="OnOverrideOpenClicked"
+                HorizontalOptions="Center"
+                Text="Tap to open Override picker" />
+            <local:HourMinutePicker
+                x:Name="OverrideTimePicker"
+                IsOpen="False"
+                SelectedTime="{Binding SelectedOverrideTime, Mode=TwoWay}"
+                SelectionChanged="OnOverrideSelectionChanged" />
+            <Label FontSize="13" Text="{Binding SelectedOverrideString}" TextColor="Gray" />
+
+            <Label FontAttributes="Bold" FontSize="14" Text="Service Timer:" />
+            <Button
+                Clicked="OnServiceOpenClicked"
+                HorizontalOptions="Center"
+                Text="Tap to open Service picker" />
+            <local:HourMinutePicker
+                x:Name="ServiceTimePicker"
+                IsOpen="False"
+                SelectedTime="{Binding SelectedServiceTime, Mode=TwoWay}"
+                SelectionChanged="OnServiceSelectionChanged" />
+            <Label FontSize="13" Text="{Binding SelectedServiceString}" TextColor="Gray" />
+        </VerticalStackLayout>
+    </ScrollView>
+
+</ContentPage>

@@ -1,0 +1,63 @@
+<?xml version="1.0" encoding="utf-8" ?>
+<ContentPage
+    x:Class="SyncfusionPickerMemoryLeak.MainPage"
+    xmlns="http://schemas.microsoft.com/dotnet/2021/maui"
+    xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml"
+    Title="ThemeElement Leak Demo">
+
+    <Grid Padding="16" RowDefinitions="Auto,*" RowSpacing="12">
+
+        <VerticalStackLayout Grid.Row="0" Spacing="8">
+            <Label
+                FontAttributes="Bold"
+                FontSize="18"
+                HorizontalOptions="Center"
+                Text="SfPicker ThemeElement Leak" />
+
+            <Label
+                FontSize="12"
+                HorizontalOptions="Center"
+                HorizontalTextAlignment="Center"
+                Text="Each cycle: push modal TabbedPage with PickerPage, call DisposeAndClearChildren, pop. ThemeElement.elements should not grow."
+                TextColor="DarkSlateGray" />
+
+            <Label
+                x:Name="CycleCountLabel"
+                HorizontalOptions="Center"
+                Text="Navigation cycles: 0" />
+
+            <Button
+                x:Name="NavigateButton"
+                Clicked="OnNavigateClicked"
+                Text="One Cycle (push modal + pop)" />
+
+            <Button
+                x:Name="AutoRunButton"
+                BackgroundColor="DarkOrange"
+                Clicked="OnAutoRunClicked"
+                Text="Auto-Run 5 Cycles"
+                TextColor="White" />
+
+            <Button
+                x:Name="GcButton"
+                Clicked="OnForceGcClicked"
+                Text="Force GC" />
+
+            <Button
+                x:Name="InspectButton"
+                Clicked="OnInspectClicked"
+                Text="Inspect ThemeElement.elements" />
+        </VerticalStackLayout>
+
+        <ScrollView Grid.Row="1">
+            <Label
+                x:Name="ResultsLabel"
+                FontFamily="Courier New"
+                FontSize="12"
+                Text="Tap 'Auto-Run 5 Cycles' to run the automated leak test."
+                VerticalOptions="Start" />
+        </ScrollView>
+
+    </Grid>
+
+</ContentPage>

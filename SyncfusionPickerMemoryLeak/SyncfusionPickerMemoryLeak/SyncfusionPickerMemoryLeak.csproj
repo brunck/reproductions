@@ -1,0 +1,58 @@
+﻿<Project Sdk="Microsoft.NET.Sdk">
+
+	<PropertyGroup>
+		<TargetFramework>net10.0-android</TargetFramework>
+
+		<OutputType>Exe</OutputType>
+		<RootNamespace>SyncfusionPickerMemoryLeak</RootNamespace>
+		<UseMaui>true</UseMaui>
+		<SingleProject>true</SingleProject>
+		<ImplicitUsings>enable</ImplicitUsings>
+		<Nullable>enable</Nullable>
+
+		<!-- Display name -->
+		<ApplicationTitle>SyncfusionPickerMemoryLeak</ApplicationTitle>
+
+		<!-- App Identifier -->
+		<ApplicationId>com.companyname.syncfusionpickermemoryleak</ApplicationId>
+
+		<!-- Versions -->
+		<ApplicationDisplayVersion>1.0</ApplicationDisplayVersion>
+		<ApplicationVersion>1</ApplicationVersion>
+
+		<!-- Reflection must work for ThemeElementInspector -->
+		<PublishTrimmed>false</PublishTrimmed>
+	</PropertyGroup>
+
+	<PropertyGroup Condition="$([MSBuild]::GetTargetPlatformIdentifier('$(TargetFramework)')) == 'android'">
+		<AndroidEnableProfiler>true</AndroidEnableProfiler>
+		<RuntimeIdentifier>android-arm64</RuntimeIdentifier>
+		<AndroidPackageFormat>apk</AndroidPackageFormat>
+		<!-- AOT requires PublishTrimmed=true, which breaks reflection used by ThemeElementInspector -->
+		<RunAOTCompilation>false</RunAOTCompilation>
+	</PropertyGroup>
+
+	<ItemGroup>
+		<!-- App Icon -->
+		<MauiIcon Include="Resources\AppIcon\appicon.svg" ForegroundFile="Resources\AppIcon\appiconfg.svg" Color="#512BD4" />
+
+		<!-- Splash Screen -->
+		<MauiSplashScreen Include="Resources\Splash\splash.svg" Color="#512BD4" BaseSize="128,128" />
+
+		<!-- Images -->
+		<MauiImage Include="Resources\Images\*" />
+
+		<!-- Custom Fonts -->
+		<MauiFont Include="Resources\Fonts\*" />
+
+		<!-- Raw Assets -->
+		<MauiAsset Include="Resources\Raw\**" LogicalName="%(RecursiveDir)%(Filename)%(Extension)" />
+	</ItemGroup>
+
+	<ItemGroup>
+		<PackageReference Include="Microsoft.Maui.Controls" Version="10.0.41" />
+		<PackageReference Include="Microsoft.Maui.Essentials" Version="10.0.41" />
+		<PackageReference Include="Syncfusion.Maui.Picker" Version="32.2.5" />
+	</ItemGroup>
+
+</Project>
