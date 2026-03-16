@@ -25,7 +25,8 @@ In a production app over 10 cycles: **+25,036 leaked objects, +1.95 MB heap grow
 | .NET SDK | 10.0.103 |
 | `Syncfusion.Maui.Picker` | 32.2.5 |
 | `Microsoft.Maui.Controls` | 10.0.41 |
-| Target | net10.0-android (API 35+) |
+| Targets | net10.0-android (API 35+), net10.0-ios (18.2+) |
+| **Affected Platforms** | **Android, iOS** |
 
 ---
 
@@ -38,8 +39,10 @@ In a production app over 10 cycles: **+25,036 leaked objects, +1.95 MB heap grow
 .\scripts\build-and-deploy.ps1 -Configuration Debug
 ```
 
-**Prerequisites:** .NET SDK 10.0.103 with `maui-android` workload, `adb` in PATH,
+**Prerequisites (Android):** .NET SDK 10.0.103 with `maui-android` workload, `adb` in PATH,
 Android device with USB debugging enabled.
+
+**Prerequisites (iOS):** .NET SDK 10.0.103 with `maui-ios` workload, Xcode 16.2+, Mac with iOS device or simulator.
 
 ### Run the Test
 
@@ -103,6 +106,8 @@ Key retained types (not present in baseline at all):
 | 1 | SyncfusionPickerMemoryLeak.DeviceDetailTabbedPage |
 | 10 | EventHandler\<PickerPropertyChangedEventArgs\> |
 | 541 | Microsoft.Maui.Controls.BindableObject.BindablePropertyContext |
+
+**Note:** This leak has been confirmed on both **Android** and **iOS** with the same version constraints.
 
 ---
 
