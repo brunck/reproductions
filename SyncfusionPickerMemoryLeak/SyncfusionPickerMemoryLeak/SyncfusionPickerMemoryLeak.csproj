@@ -1,7 +1,8 @@
 ﻿<Project Sdk="Microsoft.NET.Sdk">
 
 	<PropertyGroup>
-		<TargetFramework>net10.0-android</TargetFramework>
+		<iOSTargetFramework>net10.0-ios</iOSTargetFramework>
+		<TargetFrameworks>net10.0-android;$(iOSTargetFramework)</TargetFrameworks>
 
 		<OutputType>Exe</OutputType>
 		<RootNamespace>SyncfusionPickerMemoryLeak</RootNamespace>
