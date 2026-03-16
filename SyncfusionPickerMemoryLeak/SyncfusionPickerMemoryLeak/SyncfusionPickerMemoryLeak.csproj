@@ -20,11 +20,17 @@
 		<ApplicationDisplayVersion>1.0</ApplicationDisplayVersion>
 		<ApplicationVersion>1</ApplicationVersion>
 
-		<!-- Reflection must work for ThemeElementInspector -->
-		<PublishTrimmed>false</PublishTrimmed>
+	</PropertyGroup>
+
+	<PropertyGroup Condition="$([MSBuild]::GetTargetPlatformIdentifier('$(TargetFramework)')) == 'ios'">
+		<!-- iOS requires PublishTrimmed=true; use MtouchLink=None to disable actual trimming
+		     so reflection (ThemeElementInspector) still works -->
+		<MtouchLink>None</MtouchLink>
 	</PropertyGroup>
 
 	<PropertyGroup Condition="$([MSBuild]::GetTargetPlatformIdentifier('$(TargetFramework)')) == 'android'">
+		<!-- Reflection must work for ThemeElementInspector -->
+		<PublishTrimmed>false</PublishTrimmed>
 		<AndroidEnableProfiler>true</AndroidEnableProfiler>
 		<RuntimeIdentifier>android-arm64</RuntimeIdentifier>
 		<AndroidPackageFormat>apk</AndroidPackageFormat>
