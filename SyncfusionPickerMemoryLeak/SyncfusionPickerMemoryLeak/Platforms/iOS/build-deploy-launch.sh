@@ -71,7 +71,7 @@ get_device_id() {
     fi
 
     # Query mlaunch for current devices
-    echo "Getting device list from mlaunch (this may take 10+ seconds)..."
+    echo "Getting device list from mlaunch (this may take 10+ seconds)..." >&2
     local DEVNAME=$("$MLAUNCH_PATH" --listdev 2>/dev/null | grep -oE '[0-9A-Fa-f]{8}-[0-9A-Fa-f]{16}' | head -1)
 
     if [ -z "$DEVNAME" ]; then
@@ -104,10 +104,10 @@ launch_app() {
         fi
     fi
 
-    # If no valid cache, do the lookup
+    # If no valid cache, query dotnet for mlaunch path
     if [ -z "$MLAUNCH_PATH" ]; then
         echo "Locating mlaunch..."
-        MLAUNCH_PATH=$(dotnet build "$PROJECT_FILE" -getProperty:MlaunchPath -p:TargetFrameworks="$TARGET_FRAMEWORK" --no-restore 2>/dev/null | tail -1 | tr -d '[:space:]')
+        MLAUNCH_PATH=$(dotnet build "$PROJECT_FILE" -getProperty:MlaunchPath -f "$TARGET_FRAMEWORK" -p:TargetFrameworks="$TARGET_FRAMEWORK" --no-restore 2>&1 | tail -1 | tr -d '[:space:]')
 
         # Cache the path for next time
         if [ -f "$MLAUNCH_PATH" ] && [ -x "$MLAUNCH_PATH" ]; then
@@ -164,13 +164,18 @@ launch_app() {
             --stderr=/dev/null \
             --argument --connection-mode \
             --argument none \
-            >"$MLAUNCH_LOG" 2>&1
+            >"$MLAUNCH_LOG" 2>"$MLAUNCH_LOG.stderr"
     }
 
     # Try to launch
     do_launch "$MLAUNCH_DEVNAME" || {
         echo ""
-        echo "Launch failed. Device may have disconnected. Clearing cache and retrying..."
+        echo "Launch failed (exit $?). mlaunch log:"
+        cat "$MLAUNCH_LOG" 2>/dev/null
+        # Filter out Xcode extension noise from stderr
+        grep -v "extension point" "$MLAUNCH_LOG.stderr" 2>/dev/null
+        echo ""
+        echo "Clearing cache and retrying..."
         rm -f "$HOME/.cache/syncfusionpickermemoryleak_mlaunch_devid"
         MLAUNCH_DEVNAME=$(get_device_id true)
         if [ -z "$MLAUNCH_DEVNAME" ]; then
@@ -230,7 +235,7 @@ fi
 echo
 echo "Build successful. Publishing and creating IPA..."
 # shellcheck disable=SC2086
-if ! dotnet publish "$PROJECT_FILE" -c "$BUILD_CONFIG" \
+if ! dotnet publish "$PROJECT_FILE" -c "$BUILD_CONFIG" -f "$TARGET_FRAMEWORK" \
         -p:TargetFrameworks="$TARGET_FRAMEWORK" \
         -p:RuntimeIdentifier=ios-arm64 \
         -p:CodesignKey="$CODESIGNKEY" \
@@ -260,7 +265,7 @@ fi
 
 echo "Installing IPA to device: $DEVICE_UDID"
 if ! xcrun devicectl device install app --device "$DEVICE_UDID" "$IPA_PATH"; then
-    echo; echo "IPA installation failed!"; exit 1
+    echo; echo "IPA installation failed! Device may not be connected."; exit 1
 fi
 
 echo
