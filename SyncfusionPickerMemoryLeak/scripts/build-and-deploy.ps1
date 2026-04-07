@@ -5,6 +5,7 @@ it on the first connected Android device using adb.
 Usage: run from PowerShell (pwsh):
   .\scripts\build-and-deploy.ps1
   .\scripts\build-and-deploy.ps1 -Configuration Debug
+  .\scripts\build-and-deploy.ps1 -NoBuild   # skip build, install and launch last APK
 
 Notes:
 - Requires dotnet SDK 10.0.103 + MAUI workloads that target net10.0-android.
@@ -14,7 +15,9 @@ Notes:
 
 param(
     [Alias('c')]
-    [string]$Configuration = 'Release'
+    [string]$Configuration = 'Release',
+
+    [switch]$NoBuild
 )
 
 Set-StrictMode -Version Latest
@@ -29,29 +32,34 @@ try {
         throw "Project file not found: $projectFile"
     }
 
-    Write-Host "Cleaning $projectFile"
     $binDir = Join-Path $projectRoot "bin"
-    $objDir = Join-Path $projectRoot "obj"
-    if (Test-Path $binDir) { Remove-Item $binDir -Recurse -Force }
-    if (Test-Path $objDir) { Remove-Item $objDir -Recurse -Force }
 
-    Write-Host "Publishing $projectFile"
-    Write-Host "  Config : $Configuration"
+    if (-not $NoBuild) {
+        Write-Host "Cleaning $projectFile"
+        $objDir = Join-Path $projectRoot "obj"
+        if (Test-Path $binDir) { Remove-Item $binDir -Recurse -Force }
+        if (Test-Path $objDir) { Remove-Item $objDir -Recurse -Force }
 
-    dotnet publish $projectFile -c $Configuration --nologo
+        Write-Host "Publishing $projectFile"
+        Write-Host "  Config : $Configuration"
 
-    if ($LASTEXITCODE -ne 0) {
-        throw "dotnet publish failed with exit code $LASTEXITCODE"
+        dotnet publish $projectFile -c $Configuration --nologo
+
+        if ($LASTEXITCODE -ne 0) {
+            throw "dotnet publish failed with exit code $LASTEXITCODE"
+        }
+
+        Write-Host "Publish completed. Searching for APK under: $binDir"
+    } else {
+        Write-Host "Skipping build. Searching for existing APK under: $binDir"
     }
-
-    Write-Host "Publish completed. Searching for APK under: $binDir"
 
     $apk = Get-ChildItem -Path $binDir -Filter *.apk -Recurse -ErrorAction SilentlyContinue |
            Sort-Object LastWriteTime -Descending |
            Select-Object -First 1
 
     if (-not $apk) {
-        throw "No APK found after publish. Searched under $binDir"
+        throw "No APK found. Searched under $binDir"
     }
 
     Write-Host "Found APK: $($apk.FullName)"
