@@ -32,7 +32,7 @@ public class DeviceDetailTabbedPage : TabbedPage
         foreach (var child in Children.ToList())
         {
             child.BindingContext = null;
-            child.Handler?.DisconnectHandler();
+            child.DisconnectHandlers();
             Children.Remove(child);
         }
 
