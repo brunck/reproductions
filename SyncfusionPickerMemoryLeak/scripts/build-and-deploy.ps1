@@ -43,7 +43,7 @@ try {
         Write-Host "Publishing $projectFile"
         Write-Host "  Config : $Configuration"
 
-        dotnet publish $projectFile -c $Configuration --nologo
+        dotnet publish $projectFile -f net10.0-android -c $Configuration --nologo
 
         if ($LASTEXITCODE -ne 0) {
             throw "dotnet publish failed with exit code $LASTEXITCODE"
