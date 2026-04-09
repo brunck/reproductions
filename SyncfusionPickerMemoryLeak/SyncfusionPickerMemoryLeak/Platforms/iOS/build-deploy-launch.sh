@@ -5,6 +5,7 @@
 #   ./build-deploy-launch.sh [AdHoc|Release] --launch-only          — skip build/install, just launch last build
 #   ./build-deploy-launch.sh [AdHoc|Release] --diagnostics          — build with diagnostic port baked in, start dsrouter, launch
 #   ./build-deploy-launch.sh [AdHoc|Release] --diagnostics --launch-only  — skip build, start dsrouter, launch last diagnostic build
+#   ./build-deploy-launch.sh [AdHoc|Release] --diagnostics --fast-build   — same as --diagnostics but skips LLVM optimizer (faster AOT)
 #
 # --diagnostics: bakes DOTNET_DiagnosticPorts into the app at build time (required for AdHoc/Release on physical devices,
 #   which don't have get-task-allow and cannot accept env var injection at launch). Starts dsrouter automatically.
@@ -14,11 +15,13 @@
 BUILD_CONFIG="AdHoc"
 LAUNCH_ONLY=false
 DIAGNOSTICS=false
+FAST_BUILD=false
 
 for arg in "$@"; do
     case "$arg" in
         --launch-only) LAUNCH_ONLY=true ;;
         --diagnostics) DIAGNOSTICS=true ;;
+        --fast-build) FAST_BUILD=true ;;
         AdHoc|Release|Debug) BUILD_CONFIG="$arg" ;;
         *) echo "Unknown argument: $arg"; exit 1 ;;
     esac
@@ -219,6 +222,13 @@ if [ "$DIAGNOSTICS" = true ]; then
     echo "Diagnostics enabled: baking diagnostic port into app (127.0.0.1:9000, listen, nosuspend)."
 fi
 
+FAST_BUILD_PROPS=""
+if [ "$FAST_BUILD" = true ]; then
+    FAST_BUILD_PROPS="-p:MtouchUseLlvm=false"
+    echo "Fast build enabled: LLVM optimizer disabled (faster AOT compile, slightly less optimized code)."
+    echo
+fi
+
 echo "Building $BUILD_CONFIG configuration..."
 # Override TargetFrameworks so MSBuild never evaluates the Android TFM (which requires a different SDK)
 # shellcheck disable=SC2086
@@ -228,7 +238,7 @@ if ! dotnet build "$PROJECT_FILE" -c "$BUILD_CONFIG" \
         -p:CodesignKey="$CODESIGNKEY" \
         -p:CodesignProvision="$CODESIGNPROVISION" \
         -p:_BundlerDebug=true \
-        $DIAG_PROPS; then
+        $DIAG_PROPS $FAST_BUILD_PROPS; then
     echo; echo "Build failed!"; exit 1
 fi
 
@@ -242,7 +252,7 @@ if ! dotnet publish "$PROJECT_FILE" -c "$BUILD_CONFIG" -f "$TARGET_FRAMEWORK" \
         -p:CodesignProvision="$CODESIGNPROVISION" \
         -p:ArchiveOnBuild=true \
         -p:_BundlerDebug=true \
-        $DIAG_PROPS; then
+        $DIAG_PROPS $FAST_BUILD_PROPS; then
     echo; echo "Publish failed!"; exit 1
 fi
 
