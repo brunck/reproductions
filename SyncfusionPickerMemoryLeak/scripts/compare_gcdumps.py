@@ -47,7 +47,7 @@ def main():
     last_hdr, last_types = parse_gcdump(last_path)
 
     print("=" * 90)
-    print("GC DUMP COMPARISON: Baseline vs After 10 Nav Cycles")
+    print(f"GC DUMP COMPARISON: {base_path}  vs  {last_path}")
     print("=" * 90)
     print(f"{'':30s} {'Baseline':>15s} {'After':>15s} {'Delta':>15s}")
     print(f"{'Heap Bytes':30s} {base_hdr['heap_bytes']:>15,d} {last_hdr['heap_bytes']:>15,d} {last_hdr['heap_bytes']-base_hdr['heap_bytes']:>+15,d}")
