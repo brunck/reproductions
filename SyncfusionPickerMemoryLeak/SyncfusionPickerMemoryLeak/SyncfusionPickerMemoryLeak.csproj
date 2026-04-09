@@ -27,6 +27,8 @@
 		<!-- iOS requires PublishTrimmed=true; use MtouchLink=None to disable actual trimming
 		     so reflection (ThemeElementInspector) still works -->
 		<MtouchLink>None</MtouchLink>
+		<!-- Xcode 26 beta defaults deployment target to 26.2; pin to 16.0 to support current devices -->
+		<SupportedOSPlatformVersion>16.0</SupportedOSPlatformVersion>
 	</PropertyGroup>
 
 	<PropertyGroup Condition="$([MSBuild]::GetTargetPlatformIdentifier('$(TargetFramework)')) == 'android'">
