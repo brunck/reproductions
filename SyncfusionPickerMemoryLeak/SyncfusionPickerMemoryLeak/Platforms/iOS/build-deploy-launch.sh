@@ -56,6 +56,14 @@ CODESIGNPROVISION=""
 
 # =============== END CODE SIGNING CONFIG ===============
 
+# Check prerequisites for diagnostics mode
+if [ "$DIAGNOSTICS" = true ] && ! command -v dotnet-dsrouter &>/dev/null; then
+    echo "Error: dotnet-dsrouter not found in PATH."
+    echo "Install with: dotnet tool install --global dotnet-dsrouter"
+    echo "Then ensure ~/.dotnet/tools is in your PATH."
+    exit 1
+fi
+
 # Check for connected iOS devices (state may be "connected" or "available (paired)")
 if ! xcrun devicectl list devices | grep -qiE "connected|available"; then
     echo "Warning: No connected iOS devices detected."
