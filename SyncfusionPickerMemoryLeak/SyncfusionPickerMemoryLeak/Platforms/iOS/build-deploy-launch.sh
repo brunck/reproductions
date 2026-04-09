@@ -229,21 +229,8 @@ if [ "$FAST_BUILD" = true ]; then
     echo
 fi
 
-echo "Building $BUILD_CONFIG configuration..."
+echo "Building and publishing $BUILD_CONFIG configuration..."
 # Override TargetFrameworks so MSBuild never evaluates the Android TFM (which requires a different SDK)
-# shellcheck disable=SC2086
-if ! dotnet build "$PROJECT_FILE" -c "$BUILD_CONFIG" \
-        -p:TargetFrameworks="$TARGET_FRAMEWORK" \
-        -p:RuntimeIdentifier=ios-arm64 \
-        -p:CodesignKey="$CODESIGNKEY" \
-        -p:CodesignProvision="$CODESIGNPROVISION" \
-        -p:_BundlerDebug=true \
-        $DIAG_PROPS $FAST_BUILD_PROPS; then
-    echo; echo "Build failed!"; exit 1
-fi
-
-echo
-echo "Build successful. Publishing and creating IPA..."
 # shellcheck disable=SC2086
 if ! dotnet publish "$PROJECT_FILE" -c "$BUILD_CONFIG" -f "$TARGET_FRAMEWORK" \
         -p:TargetFrameworks="$TARGET_FRAMEWORK" \
@@ -253,11 +240,11 @@ if ! dotnet publish "$PROJECT_FILE" -c "$BUILD_CONFIG" -f "$TARGET_FRAMEWORK" \
         -p:ArchiveOnBuild=true \
         -p:_BundlerDebug=true \
         $DIAG_PROPS $FAST_BUILD_PROPS; then
-    echo; echo "Publish failed!"; exit 1
+    echo; echo "Build failed!"; exit 1
 fi
 
 echo
-echo "Publish successful. Looking for IPA file..."
+echo "Build successful. Looking for IPA file..."
 IPA_PATH=$(find "$PROJECT_DIR/bin/$BUILD_CONFIG/$TARGET_FRAMEWORK" -name "*.ipa" | head -1)
 if [ -z "$IPA_PATH" ]; then
     echo; echo "Could not find .ipa file!"; exit 1
