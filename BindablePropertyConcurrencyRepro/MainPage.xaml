@@ -1,0 +1,80 @@
+<?xml version="1.0" encoding="utf-8" ?>
+<ContentPage xmlns="http://schemas.microsoft.com/dotnet/2021/maui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml"
+             xmlns:local="clr-namespace:BindablePropertyConcurrencyRepro"
+             x:Class="BindablePropertyConcurrencyRepro.MainPage"
+             Title="Element BP concurrency">
+
+    <ContentPage.Resources>
+        <!-- Two styles for scenario D. Only TextColor differs, so applying them does not
+             force a platform layout pass; the point is the Setter -> SetValue traffic. -->
+        <Style x:Key="RaceStyleA" TargetType="Label">
+            <Setter Property="TextColor" Value="#1E88E5" />
+        </Style>
+        <Style x:Key="RaceStyleB" TargetType="Label">
+            <Setter Property="TextColor" Value="#D81B60" />
+        </Style>
+    </ContentPage.Resources>
+
+    <ScrollView>
+        <VerticalStackLayout Padding="16" Spacing="10">
+
+            <Label Text="Element._pendingHandlerUpdatesFromBPSet race"
+                   FontAttributes="Bold"
+                   FontSize="17" />
+            <Label x:Name="EnvironmentLabel" FontSize="11" />
+
+            <!-- The shared target element that every scenario writes to. -->
+            <local:RaceLabel x:Name="TargetLabel"
+                             Text="shared target element"
+                             Style="{StaticResource RaceStyleA}">
+                <VisualStateManager.VisualStateGroups>
+                    <VisualStateGroupList>
+                        <VisualStateGroup x:Name="RaceStates">
+                            <VisualState x:Name="Off">
+                                <VisualState.Setters>
+                                    <Setter Property="TextColor" Value="#1E88E5" />
+                                </VisualState.Setters>
+                            </VisualState>
+                            <VisualState x:Name="On">
+                                <VisualState.Setters>
+                                    <Setter Property="TextColor" Value="#D81B60" />
+                                </VisualState.Setters>
+                            </VisualState>
+                        </VisualStateGroup>
+                    </VisualStateGroupList>
+                </VisualStateManager.VisualStateGroups>
+            </local:RaceLabel>
+
+            <local:RaceControl x:Name="TargetControl">
+                <Label Text="RaceControl (scenario C target)" FontSize="13" />
+            </local:RaceControl>
+
+            <Button x:Name="ButtonA1"
+                    Text="A1 — 2 threads, 2 custom BPs, no platform touch"
+                    Clicked="OnRunA1" />
+            <Button x:Name="ButtonA2"
+                    Text="A2 — same, but Opacity + CharacterSpacing"
+                    Clicked="OnRunA2" />
+            <Button x:Name="ButtonB"
+                    Text="B — Realistic: bound Text + FadeTo"
+                    Clicked="OnRunB" />
+            <Button x:Name="ButtonC"
+                    Text="C — Custom BP callback + FadeTo"
+                    Clicked="OnRunC" />
+            <Button x:Name="ButtonD"
+                    Text="D — VSM / Style from background thread"
+                    Clicked="OnRunD" />
+
+            <HorizontalStackLayout Spacing="10">
+                <Button Text="Stop" Clicked="OnStop" />
+                <Button Text="Clear report" Clicked="OnClearReport" />
+            </HorizontalStackLayout>
+
+            <Label x:Name="StatusLabel" Text="idle" FontAttributes="Bold" FontSize="13" />
+            <Label x:Name="DetailLabel" FontSize="10" LineBreakMode="WordWrap" />
+
+        </VerticalStackLayout>
+    </ScrollView>
+
+</ContentPage>
