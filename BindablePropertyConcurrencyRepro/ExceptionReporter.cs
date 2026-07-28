@@ -39,9 +39,9 @@ public static class ExceptionReporter
 	}
 
 	/// <summary>Records an exception. Safe to call from any thread.</summary>
-	public static void Report(string source, Exception? exception)
+	public static void Report(string source, Exception? exception, int? threadId = null)
 	{
-		var text = Describe(source, exception);
+		var text = Describe(source, exception, threadId);
 
 		// Platform log first — this is the copy that survives a process kill even if
 		// the file write itself is what gets interrupted.
@@ -61,11 +61,17 @@ public static class ExceptionReporter
 		}
 	}
 
-	public static string Describe(string source, Exception? exception)
+	/// <summary>
+	/// Renders a report. Pass <paramref name="threadId"/> when the caller is not the thread that
+	/// threw — a scenario reports its failure back on the UI thread, so the ambient thread id
+	/// would be misleading. The unhandled-exception hooks above do run on the throwing thread and
+	/// can leave it null.
+	/// </summary>
+	public static string Describe(string source, Exception? exception, int? threadId = null)
 	{
 		var sb = new StringBuilder();
 		sb.AppendLine($"=== {source} ===");
-		sb.AppendLine($"Thread: {Environment.CurrentManagedThreadId}");
+		sb.AppendLine($"Threw on thread: {threadId ?? Environment.CurrentManagedThreadId}");
 		sb.AppendLine(exception?.ToString() ?? "(no exception object)");
 		return sb.ToString();
 	}

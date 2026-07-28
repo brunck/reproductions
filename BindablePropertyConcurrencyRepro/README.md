@@ -62,11 +62,22 @@ two signatures diagnostic of corruption rather than of a logic error.
 | **A2 — Same, platform-mapped properties** | Identical shape against `Opacity` and `CharacterSpacing` — our production shape. |
 | **B — Realistic** | `Label.Text` bound to a plain-INPC view model, notifications raised from a background loop, while a fade animation runs on that same element. |
 | **C — Custom BP callback** | [`RaceControl`](RaceControl.cs)'s `IsBusy` callback writes `BackgroundColor` on itself, driven from a bound VM property, with a fade animation on the same element. |
-| **D — Unmarshalled framework path** | `VisualStateManager.GoToState` and a `Style` assignment, both from background threads, plus a fade animation. Neither path marshals to the UI thread. |
+| **D1 — Unmarshalled framework path** | **One** background loop calling `VisualStateManager.GoToState`, racing a fade animation driven by the framework's own ticker on the UI thread. The app makes exactly one off-thread call. |
+| **D2 — Same, two off-thread writers** | `VisualStateManager.GoToState` *and* a `Style` assignment, both from background threads, plus the fade animation. Kept for comparison. |
 
-**A1 is the isolation, not the complaint.** Writing bindable properties concurrently is the *app's*
-mistake. The complaint is that the framework corrupts its own state when an app makes that mistake,
-and reports it as an exception that identifies neither the property nor the thread.
+**A1 is the isolation; D1 is the complaint.**
+
+A1 deliberately has the app write two bindable properties concurrently. That is the *app's* mistake,
+and A1's only job is to show the mechanism with nothing else in the frame — no platform view, no
+binding engine, no animation.
+
+**D1 is the case that does not require the app to do anything unusual.** The app calls exactly one
+off-thread API: `VisualStateManager.GoToState`. That method is not documented as UI-thread-only, it
+takes no dispatcher, it does not marshal, and driving it from view-model state is an ordinary MAUI
+pattern. The only other writer is the framework's own animation ticker on the UI thread. So the two
+concurrent writes to `Element._pendingHandlerUpdatesFromBPSet` are one app call and one framework
+subsystem — which makes "don't write properties from a background thread" an incomplete answer,
+because there is no documented rule the app broke.
 
 A1 exists in that form because **A2 alone is not sufficient evidence**: `Opacity` and
 `CharacterSpacing` are platform-mapped, so `Element.UpdateHandlerValue` reaches the platform view
@@ -90,14 +101,20 @@ production crash occurred in) · `Microsoft.Maui.Controls 10.0.90+8e2547a4707f74
 
 | Scenario | Result | Time to failure | Exception |
 | --- | --- | --- | --- |
+| **D1** | **THREW**, 3/3 consecutive runs from a fresh process | 0.68 s, 0.56 s, 0.67 s | `InvalidOperationException` ×2 and `IndexOutOfRangeException` ×1, all in `HashSet.AddIfNotPresent`; thrown on the background thread each time |
 | **A1** | **THREW**, 3/3 consecutive runs from a fresh process | 0.02 s, 0.03 s, 0.02 s | `IndexOutOfRangeException` and `InvalidOperationException`, both in `HashSet.AddIfNotPresent` |
 | **A2** | **THREW** | 0.03 s | `IndexOutOfRangeException` in `HashSet.AddIfNotPresent` |
 | **B** | clean | — | ran 30.2 s with no exception |
 | **C** | clean | — | ran 30.3 s with no exception |
-| **D** | **THREW** | 0.03 s | `IndexOutOfRangeException` in `HashSet.AddIfNotPresent`, via `VisualStateManager.GoToState` → `Setter.UnApply` → `ClearValue` |
+| **D2** | **THREW** | 0.03 s | `IndexOutOfRangeException` in `HashSet.AddIfNotPresent`, via `VisualStateManager.GoToState` → `Setter.UnApply` → `ClearValue` |
 
-Both production signatures appear across three A1 runs of the same unchanged binary, which is the
-point: the same corruption surfaces as two unrelated-looking exceptions.
+Both production signatures appear across three runs of **D1 alone**, and again across three runs of
+A1, all from the same unchanged binary. That is the point: one root cause surfaces as two unrelated-
+looking exceptions, neither of which names the property, the thread, or the corrupted collection.
+
+D1's three runs were each thrown on the background `GoToState` thread (managed id 4) while the
+animation ran on the UI thread. **B staying clean is consistent with the binding engine marshalling
+off-thread applies to the UI thread** — this report makes no claim of a marshalling gap there.
 
 <details>
 <summary>A1 — <code>IndexOutOfRangeException</code></summary>
@@ -130,7 +147,7 @@ System.InvalidOperationException: InvalidOperation_ConcurrentOperationsNotSuppor
 </details>
 
 <details>
-<summary>D — via <code>VisualStateManager.GoToState</code></summary>
+<summary>D1 — via <code>VisualStateManager.GoToState</code>, one off-thread call</summary>
 
 ```
 System.IndexOutOfRangeException: Arg_IndexOutOfRangeException
@@ -144,12 +161,24 @@ System.IndexOutOfRangeException: Arg_IndexOutOfRangeException
 ```
 </details>
 
-**Caveat on D:** as written it drives *two* background loops (`GoToState` and `Style`), so it is the
-same "the app made concurrent off-thread writes" shape as A1 — not yet proof that one off-thread
-`GoToState` racing ordinary UI-thread work is enough. Narrowing D to a single background
-`GoToState` loop against a UI-thread animation would settle that, and would be the stronger claim,
-since `GoToState` is commonly driven from view-model state and — unlike the binding engine — does
-not marshal.
+## Suggested direction
+
+The intended lifetime of this state is one synchronous call on one thread, so the natural fix is to
+stop storing it per-instance. Thread-local storage removes the race by construction — no lock, no
+contention — and also removes one `HashSet<string>` allocation per `Element`, which is already
+scoped as **DS06** in the memory-allocation issue (dotnet/maui#34149).
+
+One interaction is worth surfacing rather than glossing over, because it shapes what the right
+storage actually is: **the `Remove` at `Element.cs:710` is unconditional.** It runs even when
+`willFirePropertyChanged` was false and nothing was added, so the marker is already unbalanced with
+respect to re-entrancy — a nested `SetValue` for the same property name clears the outer call's
+marker today, single-threaded, per element. A bare `[ThreadStatic] static HashSet<string>` would fix
+the race and the allocation but widen that existing aliasing from *the same element* to *any element
+on that thread*. Storing a depth count, or keying on the `(element, property)` pair, would avoid the
+race without widening it.
+
+Two sibling collections on `BindableObject` appear to follow the same pattern, but nothing here
+reproduces against them and this repro makes no claim about them.
 
 ## Evidence capture
 

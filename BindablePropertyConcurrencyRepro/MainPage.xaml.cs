@@ -131,12 +131,42 @@ public partial class MainPage : ContentPage
 	}
 
 	/// <summary>
-	/// D — Unmarshalled framework path. <see cref="VisualStateManager.GoToState"/> and a
-	/// <see cref="Style"/> assignment, both applied from background threads. Neither path
-	/// marshals to the UI thread, and both are commonly driven from view-model state, so this is
-	/// the most plausible legitimate framework gap of the scenarios here.
+	/// D1 — Unmarshalled framework path, narrowed. <b>One</b> background loop calling
+	/// <see cref="VisualStateManager.GoToState"/>, racing ordinary UI-thread work (a fade
+	/// animation) on the same element.
+	///
+	/// This is the load-bearing scenario for severity. A1 and D2 both have the app performing
+	/// concurrent off-thread writes, which a reviewer can fairly call the app's bug. Here the app
+	/// calls exactly one off-thread API — and <c>GoToState</c> is not documented as UI-thread-only,
+	/// is commonly driven from view-model state, and (unlike the binding engine) does not marshal.
+	/// Everything else running is the framework's own animation ticker on the UI thread.
+	///
+	/// Both sides land in <c>Element.OnBindablePropertySet</c> on the same element:
+	/// <c>GoToState</c> via <c>Setter.Apply</c>/<c>UnApply</c> writing and clearing
+	/// <c>TextColor</c>, the animation via repeated <c>Opacity</c> writes.
 	/// </summary>
-	Task RunScenarioD(RunContext run)
+	Task RunScenarioD1(RunContext run)
+	{
+		var target = TargetLabel;
+
+		var states = run.Background(token =>
+		{
+			for (var i = 0; !token.IsCancellationRequested; i++)
+				VisualStateManager.GoToState(target, i % 2 == 0 ? "Off" : "On");
+		});
+
+		return Task.WhenAll(states, run.Foreground(token => FadeLoopAsync(target, token)));
+	}
+
+	/// <summary>
+	/// D2 — The same unmarshalled path, but with <see cref="VisualStateManager.GoToState"/> and a
+	/// <see cref="Style"/> assignment both driven from background threads.
+	///
+	/// Retained for comparison only. Because two background loops write concurrently, this has the
+	/// same "the app made concurrent off-thread writes" shape as A1, so on its own it would not
+	/// establish more than A1 already does. <see cref="RunScenarioD1"/> is the narrow claim.
+	/// </summary>
+	Task RunScenarioD2(RunContext run)
 	{
 		var target = TargetLabel;
 
@@ -169,7 +199,9 @@ public partial class MainPage : ContentPage
 
 	void OnRunC(object sender, EventArgs e) => _ = RunAsync("C (custom BP callback)", RunScenarioC);
 
-	void OnRunD(object sender, EventArgs e) => _ = RunAsync("D (VSM / Style)", RunScenarioD);
+	void OnRunD1(object sender, EventArgs e) => _ = RunAsync("D1 (1 off-thread GoToState)", RunScenarioD1);
+
+	void OnRunD2(object sender, EventArgs e) => _ = RunAsync("D2 (GoToState + Style)", RunScenarioD2);
 
 	void OnStop(object sender, EventArgs e)
 	{
@@ -210,10 +242,10 @@ public partial class MainPage : ContentPage
 			else
 			{
 				var source = $"{name} threw after {run.FailureAt.TotalSeconds:F2}s";
-				ExceptionReporter.Report(source, run.Failure);
+				ExceptionReporter.Report(source, run.Failure, run.FailureThreadId);
 				StatusLabel.Text = $"{name}: THREW after {run.FailureAt.TotalSeconds:F2}s — " +
 					$"{run.Failure.GetType().FullName}";
-				DetailLabel.Text = ExceptionReporter.Describe(source, run.Failure);
+				DetailLabel.Text = ExceptionReporter.Describe(source, run.Failure, run.FailureThreadId);
 			}
 		}
 		finally

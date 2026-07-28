@@ -29,6 +29,12 @@ public sealed class RunContext : IDisposable
 	/// <summary>Elapsed time at the moment <see cref="Failure"/> was thrown.</summary>
 	public TimeSpan FailureAt { get; private set; }
 
+	/// <summary>
+	/// Managed id of the thread that threw. Captured here rather than where the exception is
+	/// reported, because reporting happens back on the UI thread and would otherwise always say 1.
+	/// </summary>
+	public int FailureThreadId { get; private set; }
+
 	/// <summary>Runs a loop body on a background thread. The first failure ends the whole run.</summary>
 	public Task Background(Action<CancellationToken> body) => Task.Run(() =>
 	{
@@ -62,6 +68,7 @@ public sealed class RunContext : IDisposable
 		if (Interlocked.Exchange(ref _failed, 1) == 0)
 		{
 			FailureAt = _stopwatch.Elapsed;
+			FailureThreadId = Environment.CurrentManagedThreadId;
 			Failure = exception;
 		}
 
