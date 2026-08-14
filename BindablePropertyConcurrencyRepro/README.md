@@ -116,6 +116,48 @@ D1's three runs were each thrown on the background `GoToState` thread (managed i
 animation ran on the UI thread. **B staying clean is consistent with the binding engine marshalling
 off-thread applies to the UI thread** — this report makes no claim of a marshalling gap there.
 
+### iOS
+
+Single run per scenario, physical device, `Microsoft.Maui.Controls 10.0.90`.
+
+| Scenario | Result | Time to failure | Exception |
+| --- | --- | --- | --- |
+| **A1** | **THREW** | 0.01 s | `IndexOutOfRangeException` — same signature as Android |
+| A2 | THREW | 0.00 s | `UIKit.UIKitThreadAccessException` |
+| B | clean | 38.1 s | — |
+| C | clean | 39.3 s | — |
+| D1 | THREW | 0.00 s | `UIKit.UIKitThreadAccessException` |
+| D2 | THREW | 0.00 s | `UIKit.UIKitThreadAccessException` |
+
+**A1 corroborates cross-platform.** With no platform view in the frame, iOS produces the same
+`IndexOutOfRangeException` from the same `HashSet` corruption as Android — the defect is confirmed
+to live in platform-agnostic `Controls` code, not in either platform's binding to it.
+
+**D1 does not corroborate on iOS, and that is worth stating plainly rather than glossing over.**
+`GoToState`'s `Setter.UnApply` clears `TextColor`, which is platform-mapped; on iOS that reaches
+`UILabel` and UIKit's own thread-affinity check fires first, as `UIKitThreadAccessException` —
+before the race inside `_pendingHandlerUpdatesFromBPSet` gets a chance to surface. This is the same
+class of masking that motivated splitting A into A1/A2 in the first place, just arriving from the
+other platform: Android's `ViewRootImpl.checkThread` did not mask D1 (the actual `HashSet` frame
+came through), but iOS's `UIKitThreadAccessException` does. A2 is masked on iOS for the identical
+reason and was never expected to do otherwise.
+
+This is itself a useful contrast for the issue: **UIKit's check is a named, documented exception
+that identifies the actual violation** (`UIKitThreadAccessException` — touched UI off the main
+thread). MAUI's own `Controls` layer has no equivalent for
+`_pendingHandlerUpdatesFromBPSet`, so when a mapped property doesn't get there first, the failure
+mode is an unrelated `HashSet` exception instead. Two platforms, two very different failure
+qualities, from the same unsynchronized field.
+
+Practical upshot for anyone trying to reproduce D1 specifically: use a property absent from the
+platform mapper (as A1 does), or run on Android, where the race tends to win before the platform
+check does. A1 is the reliable, platform-independent evidence; D1 is Android-only in this harness.
+
+**The AOT hypothesis in the original plan did not hold.** We expected the corruption might present
+as `SIGSEGV`/`SIGABRT` with no managed stack under full AOT. Instead every iOS run produced an
+ordinary caught managed exception with a normal `ToString()`, no different in kind from Android.
+Recorded here so the assumption doesn't quietly persist into the issue text.
+
 <details>
 <summary>A1 — <code>IndexOutOfRangeException</code></summary>
 
