@@ -119,7 +119,8 @@ Single run per scenario, physical device, `Microsoft.Maui.Controls 10.0.90`.
 | Scenario | Result | Time to failure | Exception |
 | --- | --- | --- | --- |
 | **A** | **THREW** | 0.01 s | `InvalidOperationException` — one of the same two production signatures as Android |
-| **B** | **THREW** | 0.00 s | `UIKit.UIKitThreadAccessException` |
+| **B** | **THREW**, caught | 0.00 s | `UIKit.UIKitThreadAccessException`, on the background `GoToState` thread |
+| **B** | **PROCESS TERMINATED**, uncaught, after repeated runs | — | `InvalidOperationException` in `HashSet.AddIfNotPresent`, **on thread 1** |
 
 **A corroborates cross-platform.** With no platform view in the frame, iOS produces
 `InvalidOperationException` from the same `HashSet` corruption as Android — one of the same two
@@ -127,29 +128,73 @@ production signatures (`IndexOutOfRangeException` / `InvalidOperationException`)
 and B runs also produced — confirming the defect lives in platform-agnostic `Controls` code, not in
 either platform's binding to it.
 
-**B does not corroborate on iOS, and that is worth stating plainly rather than glossing over.**
-`GoToState`'s state transition applies/unapplies `Setter`s that write `TextColor`, which is
-platform-mapped (the captured iOS stack below shows `Setter.Apply`); on iOS that reaches `UILabel`
-and UIKit's own thread-affinity check fires first, as `UIKitThreadAccessException` — before the
-race inside `_pendingHandlerUpdatesFromBPSet` gets a chance to surface. Android's
-`ViewRootImpl.checkThread` did not mask B (the actual `HashSet` frame came through), but iOS's
-`UIKitThreadAccessException` does.
+**B corroborates on iOS too, but asymmetrically — and the iOS failure is the worst one in this
+repro.** `GoToState`'s state transition applies/unapplies `Setter`s that write `TextColor`, which is
+platform-mapped; on iOS that reaches `UILabel`, so UIKit's own thread-affinity check fires on the
+background thread as `UIKitThreadAccessException`, and the scenario catches it at 0.00 s. That much
+was expected.
 
-This is itself a useful contrast for the issue: **UIKit's check is a named, documented exception
-that identifies the actual violation** (`UIKitThreadAccessException` — touched UI off the main
-thread). MAUI's own `Controls` layer has no equivalent for
-`_pendingHandlerUpdatesFromBPSet`, so when a mapped property doesn't get there first, the failure
-mode is an unrelated `HashSet` exception instead. Two platforms, two very different failure
-qualities, from the same unsynchronized field.
+What the check does **not** do is prevent the corruption. The off-thread `SetValue` still mutates
+`_pendingHandlerUpdatesFromBPSet` before UIKit stops it, concurrently with the UI thread's fade
+animation writing `Opacity` to the same element. Press **B** enough times and the *UI thread* is
+the one that trips over the corrupted set — and there is no app frame on the stack to catch it, so
+the process is terminated (full trace below).
 
-Practical upshot for anyone trying to reproduce B specifically: use a property absent from the
-platform mapper (as A does), or run on Android, where the race tends to win before the platform
-check does. A is the reliable, platform-independent evidence; B is Android-only in this harness.
+Three things make that stack worth reading closely:
+
+- It is **thread 1**. The corruption surfaces on the UI thread, not on the thread that broke the rule.
+- Between `Program.Main` and the throw there is **not one line of application code**. The whole
+  stack is `ViewExtensions.FadeToAsync` → `Animation` → `Tweener` → `AnimationManager.OnFire` →
+  `PlatformTicker` → `NSActionDispatcher` — the framework's own animation ticker, start to finish.
+- It unwinds out through `UIApplication.Main`. The app cannot catch this, and unlike Android there
+  is no `Handled` flag to set (see the harness note under [Notes](#notes)).
+
+So the platform thread-affinity check does not protect the collection. It only changes which
+exception the app happens to see *first*, on the thread that made the off-thread call — while the
+real corruption lands later, elsewhere, fatally.
 
 **The AOT hypothesis in the original plan did not hold.** We expected the corruption might present
-as `SIGSEGV`/`SIGABRT` with no managed stack under full AOT. Instead every iOS run produced an
-ordinary caught managed exception with a normal `ToString()`, no different in kind from Android.
-Recorded here so the assumption doesn't quietly persist into the issue text.
+as `SIGSEGV`/`SIGABRT` with no managed stack under full AOT. It does not: every iOS failure —
+including the uncaught one that terminates the process — produced a complete managed stack with a
+normal `ToString()`, no different in kind from Android. Recorded here so the assumption doesn't
+quietly persist into the issue text.
+
+<details>
+<summary>B — <code>InvalidOperationException</code> on thread 1, uncaught, terminates the process</summary>
+
+Captured on a physical device. File paths elided; nothing else altered.
+
+```
+=== AppDomain.UnhandledException ===
+Threw on thread: 1
+System.InvalidOperationException: Operations that change non-concurrent collections must have exclusive access. A concurrent update was performed on this collection and corrupted its state. The collection's state is no longer correct.
+   at System.Collections.Generic.HashSet`1[[System.String, ...]].AddIfNotPresent(String value, Int32& location)
+   at Microsoft.Maui.Controls.Element.OnBindablePropertySet(BindableProperty property, Object original, Object value, Boolean changed, Boolean willFirePropertyChanged)
+   at Microsoft.Maui.Controls.BindableObject.SetValueActual(BindableProperty property, BindablePropertyContext context, Object value, Boolean currentlyApplying, SetValueFlags attributes, SetterSpecificity specificity, Boolean silent)
+   at Microsoft.Maui.Controls.BindableObject.SetValueCore(BindableProperty property, Object value, SetValueFlags attributes, SetValuePrivateFlags privateAttributes, SetterSpecificity specificity)
+   at Microsoft.Maui.Controls.BindableObject.SetValue(BindableProperty property, Object value)
+   at Microsoft.Maui.Controls.VisualElement.set_Opacity(Double value)
+   at Microsoft.Maui.Controls.ViewExtensions.<>c.<FadeToAsync>b__3_0(VisualElement v, Double value)
+   at Microsoft.Maui.Controls.ViewExtensions.<>c__DisplayClass1_0.<AnimateToAsync>g__UpdateProperty|0(Double f)
+   at Microsoft.Maui.Controls.Animation.<>c__DisplayClass2_0.<.ctor>b__0(Double f)
+   at Microsoft.Maui.Controls.Animation.<GetCallback>b__5_0(Double f)
+   at Microsoft.Maui.Controls.AnimationExtensions.<>c__DisplayClass21_0`1[[System.Double, ...]].<AnimateInternal>b__0(Double f)
+   at Microsoft.Maui.Controls.AnimationExtensions.HandleTweenerUpdated(Object o, EventArgs args)
+   at Microsoft.Maui.Controls.Tweener.Step(Int64 step)
+   at Microsoft.Maui.Controls.TweenerAnimation.OnTick(Double millisecondsSinceLastUpdate)
+   at Microsoft.Maui.Animations.Animation.Tick(Double milliseconds)
+   at Microsoft.Maui.Animations.AnimationManager.<OnFire>g__OnAnimationTick|20_0(Animation animation, <>c__DisplayClass20_0& )
+   at Microsoft.Maui.Animations.AnimationManager.OnFire()
+   at Microsoft.Maui.Animations.PlatformTicker.<Start>b__3_0()
+   at Foundation.NSActionDispatcher.Apply()
+   at Foundation.NSActionDispatcher.__Registrar_Callbacks__.callback_3687_Foundation_NSActionDispatcher_Apply(IntPtr pobj, IntPtr sel, IntPtr* exception_gchandle)
+--- End of stack trace from previous location ---
+   at ObjCRuntime.Runtime.ThrowException(IntPtr gchandle)
+   at UIKit.UIApplication.UIApplicationMain(Int32 argc, String[] argv, IntPtr principalClassName, IntPtr delegateClassName)
+   at UIKit.UIApplication.Main(String[] args, Type principalClass, Type delegateClass)
+   at BindablePropertyConcurrencyRepro.Program.Main(String[] args)
+```
+</details>
 
 <details>
 <summary>A — <code>IndexOutOfRangeException</code></summary>
@@ -283,8 +328,15 @@ reproduces against them and this repro makes no claim about them.
 - Every run builds its own target `Label`; no state is shared between runs.
 - B's throw sometimes lands on the UI thread inside the framework's animation ticker
   (`AnimationManager.OnFire` → … → `VisualElement.set_Opacity`), which is not inside any app code
-  and so cannot be caught by the scenario. That is reported as **THREW (unhandled)**. Left alone it
-  terminates the process; the harness marks it handled so the app stays usable, but in a real app
-  this is a hard crash.
+  and so cannot be caught by the scenario. **In a real app this is a hard crash**, and the harness
+  does not pretend otherwise — it only keeps itself usable where the platform allows:
+  - **Android:** `AndroidEnvironment.UnhandledExceptionRaiser` exposes a `Handled` flag, so the
+    report is captured, the exception is swallowed, and the run is reported as
+    **THREW (unhandled)**. The app stays alive across repeated presses.
+  - **iOS:** there is no equivalent — `ObjCRuntime.Runtime.MarshalManagedException` can change how
+    an exception crosses into native code but cannot suppress it. The process is terminated. The
+    report still survives via `last-crash.txt` and is shown on the next launch.
+- `last-crash.txt` accumulates across runs; the on-screen report renders it **newest first**, with
+  a timestamp per entry. **Clear report** empties it.
 - `MauiXamlInflator` is left at the default (runtime/XamlC) rather than the template's `SourceGen`,
   to keep XAML codegen out of the variables under test.
