@@ -71,7 +71,7 @@ public partial class MainPage : ContentPage
 	/// <see cref="VisualStateManager.GoToState"/>, racing ordinary UI-thread work (a fade
 	/// animation) on the same element.
 	///
-	/// This is the load-bearing scenario for severity: the app calls exactly one off-thread API,
+	/// This carries the severity argument on Android: the app calls exactly one off-thread API,
 	/// and <c>GoToState</c> is not documented as UI-thread-only, is commonly driven from
 	/// view-model state, and (unlike the binding engine) does not marshal. Everything else
 	/// running is the framework's own animation ticker on the UI thread.
@@ -79,6 +79,12 @@ public partial class MainPage : ContentPage
 	/// Both sides land in <c>Element.OnBindablePropertySet</c> on the same element:
 	/// <c>GoToState</c> via <c>Setter.Apply</c>/<c>UnApply</c> writing and clearing
 	/// <c>TextColor</c>, the animation via repeated <c>Opacity</c> writes.
+	///
+	/// On iOS it argues something narrower. <c>TextColor</c> reaches <c>UILabel</c>, so UIKit's
+	/// thread-affinity check kills this loop on its first iteration — enough to prove the check
+	/// does not protect the collection (the write reaches the set before UIKit stops the call),
+	/// but not enough traffic to corrupt it. There, <see cref="RunScenarioA"/> is what corrupts
+	/// the set and the UI thread dies in the layout pass. See the iOS section of the README.
 	/// </summary>
 	static Task RunScenarioB(RunContext run, RaceLabel target)
 	{

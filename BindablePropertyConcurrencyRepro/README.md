@@ -114,13 +114,16 @@ animation ran on the UI thread.
 
 ### iOS
 
-Single run per scenario, physical device, `Microsoft.Maui.Controls 10.0.90`.
+Physical device, `Microsoft.Maui.Controls 10.0.90`. The first two rows are single runs; the rest are
+repeated-press stress tests.
 
 | Scenario | Result | Time to failure | Exception |
 | --- | --- | --- | --- |
 | **A** | **THREW** | 0.01 s | `InvalidOperationException` — one of the same two production signatures as Android |
 | **B** | **THREW**, caught | 0.00 s | `UIKit.UIKitThreadAccessException`, on the background `GoToState` thread |
-| **B** | **PROCESS TERMINATED**, uncaught, after repeated runs | — | `InvalidOperationException` in `HashSet.AddIfNotPresent`, **on thread 1** |
+| **B** | **THREW**, caught, ×25 consecutive presses from a fresh launch — no termination | 0.00 s each | `UIKit.UIKitThreadAccessException` every time; B alone did **not** terminate the process |
+| **A**/**B** alternating, 5 presses each | **PROCESS TERMINATED**, uncaught | — | `IndexOutOfRangeException` in `HashSet.AddIfNotPresent`, **on thread 1**, in the **layout pass** |
+| **B** (earlier harness build) | **PROCESS TERMINATED**, uncaught | — | `InvalidOperationException` in `HashSet.AddIfNotPresent`, **on thread 1**, in the **animation ticker** |
 
 **A corroborates cross-platform.** With no platform view in the frame, iOS produces
 `InvalidOperationException` from the same `HashSet` corruption as Android — one of the same two
@@ -128,30 +131,60 @@ production signatures (`IndexOutOfRangeException` / `InvalidOperationException`)
 and B runs also produced — confirming the defect lives in platform-agnostic `Controls` code, not in
 either platform's binding to it.
 
-**B corroborates on iOS too, but asymmetrically — and the iOS failure is the worst one in this
-repro.** `GoToState`'s state transition applies/unapplies `Setter`s that write `TextColor`, which is
-platform-mapped; on iOS that reaches `UILabel`, so UIKit's own thread-affinity check fires on the
-background thread as `UIKitThreadAccessException`, and the scenario catches it at 0.00 s. That much
-was expected.
+**B corroborates on iOS too, but asymmetrically.** `GoToState`'s state transition applies/unapplies
+`Setter`s that write `TextColor`, which is platform-mapped; on iOS that reaches `UILabel`, so UIKit's
+own thread-affinity check fires on the background thread as `UIKitThreadAccessException`, and the
+scenario catches it at 0.00 s. That much was expected.
 
-What the check does **not** do is prevent the corruption. The off-thread `SetValue` still mutates
-`_pendingHandlerUpdatesFromBPSet` before UIKit stops it, concurrently with the UI thread's fade
-animation writing `Opacity` to the same element. Press **B** enough times and the *UI thread* is
-the one that trips over the corrupted set — and there is no app frame on the stack to catch it, so
-the process is terminated (full trace below).
+What the check does **not** do is prevent the corruption. The off-thread `SetValue` completes its
+`Add`/`Remove` on `_pendingHandlerUpdatesFromBPSet` *before* UIKit stops it — the caught trace below
+shows the throw arriving at `UILabel.set_TextColor` from `ElementHandler.UpdateValue`, which is
+downstream of that bracket. The collection is reached and mutated off-thread; the platform check
+only decides what the *calling* thread sees afterwards.
 
-Three things make that stack worth reading closely:
+**This UI-thread termination is the worst failure in the repro, and it has been observed on two
+independent paths** — which matters more than either path alone, because it shows the corruption is
+not tied to any particular framework subsystem. It is tied to the element: whatever the UI thread
+touches that element with next is what dies.
 
-- It is **thread 1**. The corruption surfaces on the UI thread, not on the thread that broke the rule.
-- Between `Program.Main` and the throw there is **not one line of application code**. The whole
-  stack is `ViewExtensions.FadeToAsync` → `Animation` → `Tweener` → `AnimationManager.OnFire` →
-  `PlatformTicker` → `NSActionDispatcher` — the framework's own animation ticker, start to finish.
-- It unwinds out through `UIApplication.Main`. The app cannot catch this, and unlike Android there
-  is no `Handled` flag to set (see the harness note under [Notes](#notes)).
+One honest qualification before the detail: the terminations were reached with **A** in the mix, and
+**A** is what corrupts the set. B's own off-thread write is stopped by UIKit after a single
+iteration, which is why B alone never terminated the process (see reproducibility below). What B
+contributes on iOS is the demonstration that a platform thread-affinity check does not protect the
+collection — not the kill itself.
+
+| Path | UI-thread writer | Driven by |
+| --- | --- | --- |
+| **Layout** | `VisualElement.set_Width`, via `set_Frame` → `UpdateBoundsComponents` | UIKit calling `ContentView.LayoutSubviews()` to arrange the element |
+| **Animation** | `VisualElement.set_Opacity` | `AnimationManager.OnFire` → `PlatformTicker` |
+
+The layout path is the harder of the two to argue away:
+
+- **`Width` is a read-only bindable property.** The frame is `SetValue(BindablePropertyKey, Object)`
+  — the *key* overload. An app cannot write `Width`; only the framework can. The UI-thread writer
+  here is unambiguously MAUI's own layout system.
+- **A layout pass is not optional.** Starting an animation is something an app chose to do. Being
+  arranged is not: every element that appears on screen goes through `ArrangeOverride`, and here it
+  is driven directly by UIKit calling `LayoutSubviews()`.
+- **Between `Program.Main` and the throw there is not one line of application code.**
+
+Both paths unwind out through `UIApplication.Main`. The app cannot catch either, and unlike Android
+there is no `Handled` flag to set (see the harness note under [Notes](#notes)).
 
 So the platform thread-affinity check does not protect the collection. It only changes which
 exception the app happens to see *first*, on the thread that made the off-thread call — while the
 real corruption lands later, elsewhere, fatally.
+
+**How reliably this reproduces.** Not from **B** alone: twenty-five consecutive **B** presses from a
+fresh launch never terminated the process, every one producing nothing but the caught
+`UIKitThreadAccessException`. Alternating **A** and **B**, five presses each, does terminate it.
+That asymmetry is consistent with the mechanism — B's background loop dies on its *first* iteration
+under UIKit's check, so each B press buys a single off-thread write, whereas **A**'s two loops run
+unchecked and generate the sustained concurrent traffic that actually corrupts the set. The captured
+report bears this out: the terminating thread-1 entry and an `A (custom BPs) THREW after 0.00s` entry
+on thread 5 carry the same timestamp, and the layout frames name `Label.ArrangeOverride` inside the
+`ContentView` that hosts the run's target — the same element **A** was writing to, from two threads,
+in the same second.
 
 **The AOT hypothesis in the original plan did not hold.** We expected the corruption might present
 as `SIGSEGV`/`SIGABRT` with no managed stack under full AOT. It does not: every iOS failure —
@@ -160,9 +193,57 @@ normal `ToString()`, no different in kind from Android. Recorded here so the ass
 quietly persist into the issue text.
 
 <details>
-<summary>B — <code>InvalidOperationException</code> on thread 1, uncaught, terminates the process</summary>
+<summary>A/B — <code>IndexOutOfRangeException</code> on thread 1 in the <b>layout pass</b>, uncaught, terminates the process</summary>
 
-Captured on a physical device. File paths elided; nothing else altered.
+Captured on a physical device, current harness build. Absolute repo paths elided and one generic
+type argument collapsed to `[...]`; nothing else altered.
+
+```
+=== AppDomain.UnhandledException === 2026-08-14 18:26:17
+Threw on thread: 1
+System.IndexOutOfRangeException: Index was outside the bounds of the array.
+   at System.Collections.Generic.HashSet`1[[System.String, ...]].AddIfNotPresent(String value, Int32& location)
+   at Microsoft.Maui.Controls.Element.OnBindablePropertySet(BindableProperty property, Object original, Object value, Boolean changed, Boolean willFirePropertyChanged)
+   at Microsoft.Maui.Controls.BindableObject.SetValueActual(BindableProperty property, BindablePropertyContext context, Object value, Boolean currentlyApplying, SetValueFlags attributes, SetterSpecificity specificity, Boolean silent)
+   at Microsoft.Maui.Controls.BindableObject.SetValueCore(BindableProperty property, Object value, SetValueFlags attributes, SetValuePrivateFlags privateAttributes, SetterSpecificity specificity)
+   at Microsoft.Maui.Controls.BindableObject.SetValue(BindablePropertyKey propertyKey, Object value)
+   at Microsoft.Maui.Controls.VisualElement.set_Width(Double value)
+   at Microsoft.Maui.Controls.VisualElement.UpdateBoundsComponents(Rect bounds)
+   at Microsoft.Maui.Controls.VisualElement.set_Frame(Rect value)
+   at Microsoft.Maui.Controls.VisualElement.ArrangeOverride(Rect bounds)
+   at Microsoft.Maui.Controls.Label.ArrangeOverride(Rect bounds)
+   at Microsoft.Maui.Controls.VisualElement.Microsoft.Maui.IView.Arrange(Rect bounds)
+   at Microsoft.Maui.Layouts.LayoutExtensions.ArrangeContent(IContentView contentView, Rect bounds)
+   at Microsoft.Maui.Controls.TemplatedView.Microsoft.Maui.ICrossPlatformLayout.CrossPlatformArrange(Rect bounds)
+   at Microsoft.Maui.Platform.MauiView.CrossPlatformArrange(CGRect bounds)
+   at Microsoft.Maui.Platform.MauiView.LayoutSubviews()
+   at Microsoft.Maui.Platform.ContentView.LayoutSubviews()
+   at Microsoft.Maui.Platform.ContentView.__Registrar_Callbacks__.callback_447_Microsoft_Maui_Platform_ContentView_LayoutSubviews(IntPtr pobj, IntPtr sel, IntPtr* exception_gchandle)
+--- End of stack trace from previous location ---
+   at ObjCRuntime.Runtime.ThrowException(IntPtr gchandle) in /Users/cloudtest/vss/_work/1/s/macios/src/ObjCRuntime/Runtime.cs:line 2797
+   at UIKit.UIApplication.UIApplicationMain(Int32 argc, String[] argv, IntPtr principalClassName, IntPtr delegateClassName) in /Users/cloudtest/vss/_work/1/s/macios/src/UIKit/UIApplication.cs:line 68
+   at UIKit.UIApplication.Main(String[] args, Type principalClass, Type delegateClass) in /Users/cloudtest/vss/_work/1/s/macios/src/UIKit/UIApplication.cs:line 100
+   at BindablePropertyConcurrencyRepro.Program.Main(String[] args) in Platforms/iOS/Program.cs:line 13
+```
+
+The next entry in the same report — same timestamp, same second — is the off-thread side of the same
+race:
+
+```
+=== A (custom BPs) THREW after 0.00s === 2026-08-14 18:26:17
+Threw on thread: 5
+System.IndexOutOfRangeException: Index was outside the bounds of the array.
+   at System.Collections.Generic.HashSet`1[[System.String, ...]].AddIfNotPresent(String value, Int32& location)
+   …
+```
+</details>
+
+<details>
+<summary>B — <code>InvalidOperationException</code> on thread 1 in the <b>animation ticker</b>, uncaught, terminates the process</summary>
+
+Captured on a physical device on an earlier build of this harness (before per-run element
+replacement and report timestamps), which is why there is no timestamp on the banner. The stack
+itself is unaffected by those harness changes. File paths elided; nothing else altered.
 
 ```
 === AppDomain.UnhandledException ===
@@ -328,10 +409,11 @@ reproduces against them and this repro makes no claim about them.
 
 - No DI, no services, no third-party libraries.
 - Every run builds its own target `Label`; no state is shared between runs.
-- B's throw sometimes lands on the UI thread inside the framework's animation ticker
-  (`AnimationManager.OnFire` → … → `VisualElement.set_Opacity`), which is not inside any app code
-  and so cannot be caught by the scenario. **In a real app this is a hard crash**, and the harness
-  does not pretend otherwise — it only keeps itself usable where the platform allows:
+- The throw sometimes lands on the UI thread inside framework code that no scenario can catch —
+  either the animation ticker (`AnimationManager.OnFire` → … → `VisualElement.set_Opacity`) or the
+  layout pass (`ContentView.LayoutSubviews` → … → `VisualElement.set_Width`). Neither is inside any
+  app code. **In a real app this is a hard crash**, and the harness does not pretend otherwise — it
+  only keeps itself usable where the platform allows:
   - **Android:** `AndroidEnvironment.UnhandledExceptionRaiser` exposes a `Handled` flag, so the
     report is captured, the exception is swallowed, and the run is reported as
     **THREW (unhandled)**. The app stays alive across repeated presses.
