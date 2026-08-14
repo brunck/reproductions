@@ -12,6 +12,9 @@ public static class ExceptionReporter
 {
 	public const string Tag = "BPRACE";
 
+	/// <summary>Delimits reports in the log file so they can be split apart and re-ordered.</summary>
+	const string Separator = "─────";
+
 	static readonly object FileLock = new();
 	static bool _installed;
 
@@ -91,7 +94,7 @@ public static class ExceptionReporter
 		{
 			lock (FileLock)
 			{
-				File.AppendAllText(LogPath, text + Environment.NewLine);
+				File.AppendAllText(LogPath, $"{Separator}{Environment.NewLine}{text}{Environment.NewLine}");
 			}
 		}
 		catch
@@ -109,20 +112,40 @@ public static class ExceptionReporter
 	public static string Describe(string source, Exception? exception, int? threadId = null)
 	{
 		var sb = new StringBuilder();
-		sb.AppendLine($"=== {source} ===");
+		sb.AppendLine($"=== {source} === {DateTime.Now:yyyy-MM-dd HH:mm:ss}");
 		sb.AppendLine($"Threw on thread: {threadId ?? Environment.CurrentManagedThreadId}");
 		sb.AppendLine(exception?.ToString() ?? "(no exception object)");
 		return sb.ToString();
 	}
 
+	/// <summary>
+	/// Returns the captured reports <b>newest first</b>. The file itself is append-only, but a run
+	/// that kills the process is read back on the next launch — and the one worth reading is always
+	/// the last one written, which should not require scrolling past every earlier report to find.
+	/// </summary>
 	public static string ReadPreviousReports()
 	{
 		try
 		{
+			string raw;
 			lock (FileLock)
 			{
-				return File.Exists(LogPath) ? File.ReadAllText(LogPath) : string.Empty;
+				if (!File.Exists(LogPath))
+					return string.Empty;
+
+				raw = File.ReadAllText(LogPath);
 			}
+
+			var reports = raw.Split(Separator,
+				StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+
+			if (reports.Length <= 1)
+				return raw;
+
+			Array.Reverse(reports);
+
+			return $"{reports.Length} reports, newest first:{Environment.NewLine}{Environment.NewLine}" +
+				string.Join(Environment.NewLine + Environment.NewLine, reports);
 		}
 		catch (Exception ex)
 		{

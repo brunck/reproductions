@@ -399,3 +399,6 @@ FodyWeavers.xsd
 
 C:
 gcdumps/
+
+# Device log captures taken while investigating a repro
+BindablePropertyConcurrencyRepro/scripts/*.txt
