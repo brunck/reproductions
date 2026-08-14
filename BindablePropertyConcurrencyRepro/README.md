@@ -288,9 +288,11 @@ UIKit.UIKitThreadAccessException: UIKit Consistency error: you are calling a UIK
 ```
 
 (A few generic-type-argument frames collapsed to `[...]` for readability; nothing diagnostic was in
-them. This is the concrete illustration of "B is masked on iOS": the call never gets past
-`UILabel.set_TextColor` to reach `Element.OnBindablePropertySet`/the `HashSet` at all, unlike
-Android where the race wins and the real corruption surfaces instead.)
+them. This is exactly what UIKit's thread-affinity check masks, and how much: on *this* call, on the
+background thread, execution never gets past `UILabel.set_TextColor` to reach
+`Element.OnBindablePropertySet`/the `HashSet`, whereas on Android the same call reaches the set and
+corrupts it. What the check does not do is prevent the corruption — the first trace in this section
+is the same scenario killing the process from thread 1.)
 </details>
 
 ## Suggested direction
