@@ -6,7 +6,7 @@
              Title="Element BP concurrency">
 
     <ContentPage.Resources>
-        <!-- Two styles for scenario D. Only TextColor differs, so applying them does not
+        <!-- Off/On states for scenario B. Only TextColor differs, so applying them does not
              force a platform layout pass; the point is the Setter -> SetValue traffic. -->
         <Style x:Key="RaceStyleA" TargetType="Label">
             <Setter Property="TextColor" Value="#1E88E5" />
@@ -46,28 +46,12 @@
                 </VisualStateManager.VisualStateGroups>
             </local:RaceLabel>
 
-            <local:RaceControl x:Name="TargetControl">
-                <Label Text="RaceControl (scenario C target)" FontSize="13" />
-            </local:RaceControl>
-
-            <Button x:Name="ButtonA1"
-                    Text="A1 — 2 threads, 2 custom BPs, no platform touch"
-                    Clicked="OnRunA1" />
-            <Button x:Name="ButtonA2"
-                    Text="A2 — same, but Opacity + CharacterSpacing"
-                    Clicked="OnRunA2" />
+            <Button x:Name="ButtonA"
+                    Text="A — 2 threads, 2 custom BPs, no platform touch"
+                    Clicked="OnRunA" />
             <Button x:Name="ButtonB"
-                    Text="B — Realistic: bound Text + FadeTo"
+                    Text="B — 1 off-thread GoToState vs UI-thread animation"
                     Clicked="OnRunB" />
-            <Button x:Name="ButtonC"
-                    Text="C — Custom BP callback + FadeTo"
-                    Clicked="OnRunC" />
-            <Button x:Name="ButtonD1"
-                    Text="D1 — 1 off-thread GoToState vs UI-thread animation"
-                    Clicked="OnRunD1" />
-            <Button x:Name="ButtonD2"
-                    Text="D2 — off-thread GoToState + Style"
-                    Clicked="OnRunD2" />
 
             <HorizontalStackLayout Spacing="10">
                 <Button Text="Stop" Clicked="OnStop" />

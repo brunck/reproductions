@@ -1,4 +1,3 @@
-using System.Globalization;
 using System.Reflection;
 
 namespace BindablePropertyConcurrencyRepro;
@@ -7,8 +6,6 @@ public partial class MainPage : ContentPage
 {
 	/// <summary>How long a scenario runs before it is declared clean.</summary>
 	static readonly TimeSpan RunDuration = TimeSpan.FromSeconds(30);
-
-	readonly StressViewModel _viewModel = new();
 
 	RunContext? _run;
 
@@ -29,19 +26,19 @@ public partial class MainPage : ContentPage
 	// ---------------------------------------------------------------- scenarios
 
 	/// <summary>
-	/// A1 — Reduced, no platform interaction. Two background loops writing two different custom
-	/// bindable properties on the same element, alternating values so <c>willFirePropertyChanged</c>
-	/// is true and <c>_pendingHandlerUpdatesFromBPSet.Add</c> is reached on both threads.
+	/// A — Two background loops writing two different custom bindable properties on the same
+	/// element, alternating values so <c>willFirePropertyChanged</c> is true and
+	/// <c>_pendingHandlerUpdatesFromBPSet.Add</c> is reached on both threads.
 	///
 	/// Neither property is in any platform property mapper, so no platform view is touched on any
 	/// thread (see <see cref="RaceLabel"/>). The only shared mutable state in play is the
 	/// framework's own <c>HashSet</c>.
 	///
-	/// This is the isolation, NOT the complaint. Writing bindable properties concurrently is the
-	/// app's mistake; the complaint is that the framework corrupts its own state when an app makes
-	/// that mistake, and reports it as an exception naming neither the property nor the thread.
+	/// This isolates the mechanism. Writing bindable properties concurrently is the app's
+	/// mistake; the complaint is that the framework corrupts its own state when an app makes that
+	/// mistake, and reports it as an exception naming neither the property nor the thread.
 	/// </summary>
-	Task RunScenarioA1(RunContext run)
+	Task RunScenarioA(RunContext run)
 	{
 		var target = TargetLabel;
 
@@ -61,91 +58,20 @@ public partial class MainPage : ContentPage
 	}
 
 	/// <summary>
-	/// A2 — Same shape, but against platform-mapped properties (<c>Opacity</c>,
-	/// <c>CharacterSpacing</c>) — our production shape.
-	///
-	/// Included to document why A1 has to use custom properties: here
-	/// <c>Element.UpdateHandlerValue</c> reaches the platform view and Android's
-	/// <c>ViewRootImpl.checkThread</c> throws immediately, masking the framework defect behind a
-	/// platform thread-affinity error.
-	/// </summary>
-	Task RunScenarioA2(RunContext run)
-	{
-		var target = TargetLabel;
-
-		var opacity = run.Background(token =>
-		{
-			for (var i = 0; !token.IsCancellationRequested; i++)
-				target.Opacity = i % 2 == 0 ? 1.0 : 0.99;
-		});
-
-		var spacing = run.Background(token =>
-		{
-			for (var i = 0; !token.IsCancellationRequested; i++)
-				target.CharacterSpacing = i % 2 == 0 ? 0 : 1;
-		});
-
-		return Task.WhenAll(opacity, spacing);
-	}
-
-	/// <summary>
-	/// B — Realistic. <c>Label.Text</c> bound to a plain-INPC view model whose notifications are
-	/// raised from a background loop, while a fade animation runs on the UI thread against that
-	/// same element. This is our production shape.
-	///
-	/// An experiment, not a known crash: MAUI marshals off-thread binding applies to the UI
-	/// thread, so this may well stay clean.
-	/// </summary>
-	Task RunScenarioB(RunContext run)
-	{
-		TargetLabel.BindingContext = _viewModel;
-		TargetLabel.SetBinding(Label.TextProperty, new Binding(nameof(StressViewModel.Text)));
-
-		var notifier = run.Background(token =>
-		{
-			for (var i = 0; !token.IsCancellationRequested; i++)
-				_viewModel.Text = i.ToString(CultureInfo.InvariantCulture);
-		});
-
-		return Task.WhenAll(notifier, run.Foreground(token => FadeLoopAsync(TargetLabel, token)));
-	}
-
-	/// <summary>
-	/// C — Custom BP callback. A bound view-model property drives <see cref="RaceControl.IsBusy"/>,
-	/// whose <c>propertyChanged</c> callback writes <c>BackgroundColor</c> on the same element,
-	/// while a fade animation runs on it. Nested writes with two different property names against
-	/// one shared set.
-	/// </summary>
-	Task RunScenarioC(RunContext run)
-	{
-		TargetControl.BindingContext = _viewModel;
-		TargetControl.SetBinding(RaceControl.IsBusyProperty, new Binding(nameof(StressViewModel.IsBusy)));
-
-		var toggler = run.Background(token =>
-		{
-			for (var i = 0; !token.IsCancellationRequested; i++)
-				_viewModel.IsBusy = i % 2 == 0;
-		});
-
-		return Task.WhenAll(toggler, run.Foreground(token => FadeLoopAsync(TargetControl, token)));
-	}
-
-	/// <summary>
-	/// D1 — Unmarshalled framework path, narrowed. <b>One</b> background loop calling
+	/// B — Unmarshalled framework path. <b>One</b> background loop calling
 	/// <see cref="VisualStateManager.GoToState"/>, racing ordinary UI-thread work (a fade
 	/// animation) on the same element.
 	///
-	/// This is the load-bearing scenario for severity. A1 and D2 both have the app performing
-	/// concurrent off-thread writes, which a reviewer can fairly call the app's bug. Here the app
-	/// calls exactly one off-thread API — and <c>GoToState</c> is not documented as UI-thread-only,
-	/// is commonly driven from view-model state, and (unlike the binding engine) does not marshal.
-	/// Everything else running is the framework's own animation ticker on the UI thread.
+	/// This is the load-bearing scenario for severity: the app calls exactly one off-thread API,
+	/// and <c>GoToState</c> is not documented as UI-thread-only, is commonly driven from
+	/// view-model state, and (unlike the binding engine) does not marshal. Everything else
+	/// running is the framework's own animation ticker on the UI thread.
 	///
 	/// Both sides land in <c>Element.OnBindablePropertySet</c> on the same element:
 	/// <c>GoToState</c> via <c>Setter.Apply</c>/<c>UnApply</c> writing and clearing
 	/// <c>TextColor</c>, the animation via repeated <c>Opacity</c> writes.
 	/// </summary>
-	Task RunScenarioD1(RunContext run)
+	Task RunScenarioB(RunContext run)
 	{
 		var target = TargetLabel;
 
@@ -158,50 +84,11 @@ public partial class MainPage : ContentPage
 		return Task.WhenAll(states, run.Foreground(token => FadeLoopAsync(target, token)));
 	}
 
-	/// <summary>
-	/// D2 — The same unmarshalled path, but with <see cref="VisualStateManager.GoToState"/> and a
-	/// <see cref="Style"/> assignment both driven from background threads.
-	///
-	/// Retained for comparison only. Because two background loops write concurrently, this has the
-	/// same "the app made concurrent off-thread writes" shape as A1, so on its own it would not
-	/// establish more than A1 already does. <see cref="RunScenarioD1"/> is the narrow claim.
-	/// </summary>
-	Task RunScenarioD2(RunContext run)
-	{
-		var target = TargetLabel;
-
-		// Resolve the styles on the UI thread; only the assignment happens off-thread.
-		var styleA = (Style)Resources["RaceStyleA"];
-		var styleB = (Style)Resources["RaceStyleB"];
-
-		var states = run.Background(token =>
-		{
-			for (var i = 0; !token.IsCancellationRequested; i++)
-				VisualStateManager.GoToState(target, i % 2 == 0 ? "Off" : "On");
-		});
-
-		var styles = run.Background(token =>
-		{
-			for (var i = 0; !token.IsCancellationRequested; i++)
-				target.Style = i % 2 == 0 ? styleA : styleB;
-		});
-
-		return Task.WhenAll(states, styles, run.Foreground(token => FadeLoopAsync(target, token)));
-	}
-
 	// ---------------------------------------------------------------- plumbing
 
-	void OnRunA1(object sender, EventArgs e) => _ = RunAsync("A1 (custom BPs)", RunScenarioA1);
+	void OnRunA(object sender, EventArgs e) => _ = RunAsync("A (custom BPs)", RunScenarioA);
 
-	void OnRunA2(object sender, EventArgs e) => _ = RunAsync("A2 (mapped BPs)", RunScenarioA2);
-
-	void OnRunB(object sender, EventArgs e) => _ = RunAsync("B (realistic)", RunScenarioB);
-
-	void OnRunC(object sender, EventArgs e) => _ = RunAsync("C (custom BP callback)", RunScenarioC);
-
-	void OnRunD1(object sender, EventArgs e) => _ = RunAsync("D1 (1 off-thread GoToState)", RunScenarioD1);
-
-	void OnRunD2(object sender, EventArgs e) => _ = RunAsync("D2 (GoToState + Style)", RunScenarioD2);
+	void OnRunB(object sender, EventArgs e) => _ = RunAsync("B (1 off-thread GoToState)", RunScenarioB);
 
 	void OnStop(object sender, EventArgs e)
 	{
@@ -255,21 +142,14 @@ public partial class MainPage : ContentPage
 		}
 	}
 
-	/// <summary>Puts the shared elements back to a known state between scenarios.</summary>
+	/// <summary>Puts the shared element back to a known state between scenarios.</summary>
 	void ResetTarget()
 	{
-		TargetLabel.RemoveBinding(Label.TextProperty);
-		TargetControl.RemoveBinding(RaceControl.IsBusyProperty);
-
 		TargetLabel.Style = (Style)Resources["RaceStyleA"];
 		TargetLabel.Text = "shared target element";
 		TargetLabel.Opacity = 1;
-		TargetLabel.CharacterSpacing = 0;
 		TargetLabel.RaceAlpha = 0;
 		TargetLabel.RaceBeta = 0;
-
-		TargetControl.Opacity = 1;
-		TargetControl.ClearValue(BackgroundColorProperty);
 	}
 
 	static async Task FadeLoopAsync(VisualElement element, CancellationToken token)

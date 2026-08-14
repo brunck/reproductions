@@ -51,40 +51,36 @@ two signatures diagnostic of corruption rather than of a logic error.
 ## Repro Steps
 
 1. Build and deploy to a physical Android device (or a simulator/device for iOS).
-2. Press **A1**. Each button runs a bounded stress loop (30 s) against a single shared element and
-   reports **CLEAN** or **THREW** in the status label, with the caught exception's full
+2. Press **A**, then **B**. Each button runs a bounded stress loop (30 s) against a single shared
+   `Label` and reports **CLEAN** or **THREW** in the status label, with the caught exception's full
    `ToString()` rendered below it. Failure time is stamped at the throw site, not when the loops
    finish unwinding.
 
 | Button | What it does |
 | --- | --- |
-| **A1 — Reduced, no platform interaction** | Two `Task.Run` loops writing two different *custom* bindable properties on the same element (see [RaceLabel.cs](RaceLabel.cs)). Neither is in any platform property mapper, so no platform view is touched on any thread. |
-| **A2 — Same, platform-mapped properties** | Identical shape against `Opacity` and `CharacterSpacing` — our production shape. |
-| **B — Realistic** | `Label.Text` bound to a plain-INPC view model, notifications raised from a background loop, while a fade animation runs on that same element. |
-| **C — Custom BP callback** | [`RaceControl`](RaceControl.cs)'s `IsBusy` callback writes `BackgroundColor` on itself, driven from a bound VM property, with a fade animation on the same element. |
-| **D1 — Unmarshalled framework path** | **One** background loop calling `VisualStateManager.GoToState`, racing a fade animation driven by the framework's own ticker on the UI thread. The app makes exactly one off-thread call. |
-| **D2 — Same, two off-thread writers** | `VisualStateManager.GoToState` *and* a `Style` assignment, both from background threads, plus the fade animation. Kept for comparison. |
+| **A — Isolated mechanism** | Two `Task.Run` loops writing two different *custom* bindable properties on the same element (see [RaceLabel.cs](RaceLabel.cs)). Neither property is in any platform property mapper, so no platform view is touched on any thread. |
+| **B — Unmarshalled framework path** | **One** background loop calling `VisualStateManager.GoToState`, racing a fade animation driven by the framework's own ticker on the UI thread. The app makes exactly one off-thread call. |
 
-**A1 is the isolation; D1 is the complaint.**
+**A is the isolation; B is the complaint.**
 
-A1 deliberately has the app write two bindable properties concurrently. That is the *app's* mistake,
-and A1's only job is to show the mechanism with nothing else in the frame — no platform view, no
-binding engine, no animation.
+A deliberately has the app write two bindable properties concurrently. That is the *app's*
+mistake, and A's only job is to show the mechanism with nothing else in the frame — no platform
+view, no binding engine, no animation. A uses custom, unmapped properties (rather than a mapped
+one like `Opacity`) because a mapped property can hit a platform thread-affinity check — Android's
+`ViewRootImpl.checkThread`, iOS's `UIKitThreadAccessException` — before the write ever reaches the
+vulnerable `HashSet` code, which would mask the framework defect behind a platform error instead.
 
-**D1 is the case that does not require the app to do anything unusual.** The app calls exactly one
+**B is the case that does not require the app to do anything unusual.** The app calls exactly one
 off-thread API: `VisualStateManager.GoToState`. That method is not documented as UI-thread-only, it
 takes no dispatcher, it does not marshal, and driving it from view-model state is an ordinary MAUI
 pattern. The only other writer is the framework's own animation ticker on the UI thread. So the two
 concurrent writes to `Element._pendingHandlerUpdatesFromBPSet` are one app call and one framework
 subsystem — which makes "don't write properties from a background thread" an incomplete answer,
-because there is no documented rule the app broke.
-
-A1 exists in that form because **A2 alone is not sufficient evidence**: `Opacity` and
-`CharacterSpacing` are platform-mapped, so `Element.UpdateHandlerValue` reaches the platform view
-and Android's `ViewRootImpl.checkThread` can throw first, masking the framework defect behind
-`CalledFromWrongThreadException`. A1
-removes the platform from the picture entirely: every frame between the app and the `HashSet` is
-platform-agnostic `Controls` code.
+because there is no documented rule the app broke. B also happens to use a *mapped* property
+(`TextColor`, via `Setter.Apply`/`UnApply`), which is exactly what lets it demonstrate the
+platform-masking behavior described above: on Android the race wins and the real `HashSet`
+corruption surfaces; on iOS, UIKit's own thread-affinity check fires first (see the iOS results
+below).
 
 ## Expected vs Actual
 
@@ -101,20 +97,16 @@ production crash occurred in) · `Microsoft.Maui.Controls 10.0.90+8e2547a4707f74
 
 | Scenario | Result | Time to failure | Exception |
 | --- | --- | --- | --- |
-| **D1** | **THREW**, 3/3 consecutive runs from a fresh process | 0.68 s, 0.56 s, 0.67 s | `InvalidOperationException` ×2 and `IndexOutOfRangeException` ×1, all in `HashSet.AddIfNotPresent`; thrown on the background thread each time |
-| **A1** | **THREW**, 3/3 consecutive runs from a fresh process | 0.02 s, 0.03 s, 0.02 s | `IndexOutOfRangeException` and `InvalidOperationException`, both in `HashSet.AddIfNotPresent` |
-| **A2** | **THREW** | 0.03 s | `IndexOutOfRangeException` in `HashSet.AddIfNotPresent` |
-| **B** | clean | — | ran 30.2 s with no exception |
-| **C** | clean | — | ran 30.3 s with no exception |
-| **D2** | **THREW** | 0.03 s | `IndexOutOfRangeException` in `HashSet.AddIfNotPresent`, via `VisualStateManager.GoToState` → `Setter.UnApply` → `ClearValue` |
+| **A** | **THREW**, 3/3 consecutive runs from a fresh process | 0.02 s, 0.03 s, 0.02 s | `IndexOutOfRangeException` and `InvalidOperationException`, both in `HashSet.AddIfNotPresent` |
+| **B** | **THREW**, 3/3 consecutive runs from a fresh process | 0.68 s, 0.56 s, 0.67 s | `InvalidOperationException` ×2 and `IndexOutOfRangeException` ×1, all in `HashSet.AddIfNotPresent`; thrown on the background thread each time |
 
-Both production signatures appear across three runs of **D1 alone**, and again across three runs of
-A1, all from the same unchanged binary. That is the point: one root cause surfaces as two unrelated-
-looking exceptions, neither of which names the property, the thread, or the corrupted collection.
+Both production signatures appear across three runs of **B alone**, and again across three runs of
+**A**, all from the same unchanged binary. That is the point: one root cause surfaces as two
+unrelated-looking exceptions, neither of which names the property, the thread, or the corrupted
+collection.
 
-D1's three runs were each thrown on the background `GoToState` thread (managed id 4) while the
-animation ran on the UI thread. **B staying clean is consistent with the binding engine marshalling
-off-thread applies to the UI thread** — this report makes no claim of a marshalling gap there.
+B's three runs were each thrown on the background `GoToState` thread (managed id 4) while the
+animation ran on the UI thread.
 
 ### iOS
 
@@ -122,25 +114,22 @@ Single run per scenario, physical device, `Microsoft.Maui.Controls 10.0.90`.
 
 | Scenario | Result | Time to failure | Exception |
 | --- | --- | --- | --- |
-| **A1** | **THREW** | 0.01 s | `IndexOutOfRangeException` — same signature as Android |
-| A2 | THREW | 0.00 s | `UIKit.UIKitThreadAccessException` |
-| B | clean | 38.1 s | — |
-| C | clean | 39.3 s | — |
-| D1 | THREW | 0.00 s | `UIKit.UIKitThreadAccessException` |
-| D2 | THREW | 0.00 s | `UIKit.UIKitThreadAccessException` |
+| **A** | **THREW** | 0.01 s | `InvalidOperationException` — one of the same two production signatures as Android |
+| **B** | **THREW** | 0.00 s | `UIKit.UIKitThreadAccessException` |
 
-**A1 corroborates cross-platform.** With no platform view in the frame, iOS produces the same
-`IndexOutOfRangeException` from the same `HashSet` corruption as Android — the defect is confirmed
-to live in platform-agnostic `Controls` code, not in either platform's binding to it.
+**A corroborates cross-platform.** With no platform view in the frame, iOS produces
+`InvalidOperationException` from the same `HashSet` corruption as Android — one of the same two
+production signatures (`IndexOutOfRangeException` / `InvalidOperationException`) that Android's A
+and B runs also produced — confirming the defect lives in platform-agnostic `Controls` code, not in
+either platform's binding to it.
 
-**D1 does not corroborate on iOS, and that is worth stating plainly rather than glossing over.**
-`GoToState`'s `Setter.UnApply` clears `TextColor`, which is platform-mapped; on iOS that reaches
-`UILabel` and UIKit's own thread-affinity check fires first, as `UIKitThreadAccessException` —
-before the race inside `_pendingHandlerUpdatesFromBPSet` gets a chance to surface. This is the same
-class of masking that motivated splitting A into A1/A2 in the first place, just arriving from the
-other platform: Android's `ViewRootImpl.checkThread` did not mask D1 (the actual `HashSet` frame
-came through), but iOS's `UIKitThreadAccessException` does. A2 is masked on iOS for the identical
-reason and was never expected to do otherwise.
+**B does not corroborate on iOS, and that is worth stating plainly rather than glossing over.**
+`GoToState`'s state transition applies/unapplies `Setter`s that write `TextColor`, which is
+platform-mapped (the captured iOS stack below shows `Setter.Apply`); on iOS that reaches `UILabel`
+and UIKit's own thread-affinity check fires first, as `UIKitThreadAccessException` — before the
+race inside `_pendingHandlerUpdatesFromBPSet` gets a chance to surface. Android's
+`ViewRootImpl.checkThread` did not mask B (the actual `HashSet` frame came through), but iOS's
+`UIKitThreadAccessException` does.
 
 This is itself a useful contrast for the issue: **UIKit's check is a named, documented exception
 that identifies the actual violation** (`UIKitThreadAccessException` — touched UI off the main
@@ -149,9 +138,9 @@ thread). MAUI's own `Controls` layer has no equivalent for
 mode is an unrelated `HashSet` exception instead. Two platforms, two very different failure
 qualities, from the same unsynchronized field.
 
-Practical upshot for anyone trying to reproduce D1 specifically: use a property absent from the
-platform mapper (as A1 does), or run on Android, where the race tends to win before the platform
-check does. A1 is the reliable, platform-independent evidence; D1 is Android-only in this harness.
+Practical upshot for anyone trying to reproduce B specifically: use a property absent from the
+platform mapper (as A does), or run on Android, where the race tends to win before the platform
+check does. A is the reliable, platform-independent evidence; B is Android-only in this harness.
 
 **The AOT hypothesis in the original plan did not hold.** We expected the corruption might present
 as `SIGSEGV`/`SIGABRT` with no managed stack under full AOT. Instead every iOS run produced an
@@ -159,7 +148,7 @@ ordinary caught managed exception with a normal `ToString()`, no different in ki
 Recorded here so the assumption doesn't quietly persist into the issue text.
 
 <details>
-<summary>A1 — <code>IndexOutOfRangeException</code></summary>
+<summary>A — <code>IndexOutOfRangeException</code></summary>
 
 ```
 System.IndexOutOfRangeException: Arg_IndexOutOfRangeException
@@ -174,7 +163,7 @@ System.IndexOutOfRangeException: Arg_IndexOutOfRangeException
 </details>
 
 <details>
-<summary>A1 — <code>InvalidOperationException</code>, same binary, same button</summary>
+<summary>A — <code>InvalidOperationException</code>, same binary, same button</summary>
 
 ```
 System.InvalidOperationException: InvalidOperation_ConcurrentOperationsNotSupported
@@ -189,7 +178,7 @@ System.InvalidOperationException: InvalidOperation_ConcurrentOperationsNotSuppor
 </details>
 
 <details>
-<summary>D1 — via <code>VisualStateManager.GoToState</code>, one off-thread call</summary>
+<summary>B — via <code>VisualStateManager.GoToState</code>, one off-thread call</summary>
 
 ```
 System.IndexOutOfRangeException: Arg_IndexOutOfRangeException
@@ -201,6 +190,58 @@ System.IndexOutOfRangeException: Arg_IndexOutOfRangeException
    at Microsoft.Maui.Controls.Setter.UnApply(BindableObject target, SetterSpecificity specificity)
    at Microsoft.Maui.Controls.VisualStateManager.GoToState(VisualElement visualElement, String name)
 ```
+</details>
+
+<details>
+<summary>iOS — A, <code>InvalidOperationException</code></summary>
+
+```
+=== A1 (custom BPs) threw after 0.01s ===
+Threw on thread: 3
+System.InvalidOperationException: Operations that change non-concurrent collections must have exclusive access. A concurrent update was performed on this collection and corrupted its state. The collection's state is no longer correct.
+   at System.Collections.Generic.HashSet`1[[System.String, System.Private.CoreLib, Version=10.0.0.0, Culture=neutral, PublicKeyToken=7cec85d7bea7798e]].AddIfNotPresent(String value, Int32& location)
+   at Microsoft.Maui.Controls.Element.OnBindablePropertySet(BindableProperty property, Object original, Object value, Boolean changed, Boolean willFirePropertyChanged)
+   at Microsoft.Maui.Controls.BindableObject.SetValueActual(BindableProperty property, BindablePropertyContext context, Object value, Boolean currentlyApplying, SetValueFlags attributes, SetterSpecificity specificity, Boolean silent)
+   at Microsoft.Maui.Controls.BindableObject.SetValueCore(BindableProperty property, Object value, SetValueFlags attributes, SetValuePrivateFlags privateAttributes, SetterSpecificity specificity)
+   at Microsoft.Maui.Controls.BindableObject.SetValue(BindableProperty property, Object value)
+   at BindablePropertyConcurrencyRepro.RaceLabel.set_RaceAlpha(Int32 value) in RaceLabel.cs:line 28
+   at BindablePropertyConcurrencyRepro.MainPage.<>c__DisplayClass4_0.<RunScenarioA1>b__0(CancellationToken token) in MainPage.xaml.cs:line 51
+   at BindablePropertyConcurrencyRepro.RunContext.<>c__DisplayClass20_0.<Background>b__0() in RunContext.cs:line 43
+```
+
+(Remaining frames scrolled off-screen in the on-device capture; the frames above are the
+diagnostic ones — same `HashSet.AddIfNotPresent` → `Element.OnBindablePropertySet` chain as
+Android. Absolute source paths from the on-device text have been shortened to filenames here.)
+</details>
+
+<details>
+<summary>iOS — B, masked by <code>UIKitThreadAccessException</code> (never reaches the HashSet)</summary>
+
+```
+=== D1 (1 off-thread GoToState) threw after 0.00s ===
+Threw on thread: 3
+UIKit.UIKitThreadAccessException: UIKit Consistency error: you are calling a UIKit method that can only be invoked from the UI thread.
+   at UIKit.UIApplication.EnsureUIThread() in /Users/cloudtest/vss/_work/1/s/macios/src/UIKit/UIApplication.cs:line 133
+   at UIKit.UILabel.set_TextColor(UIColor value) in /Users/cloudtest/vss/_work/1/s/macios/src/build/dotnet/ios/generated-sources/UIKit/UILabel.g.cs:line 812
+   at Microsoft.Maui.Platform.LabelExtensions.UpdateTextColor(UILabel platformLabel, ITextStyle textStyle, UIColor defaultColor)
+   at Microsoft.Maui.Handlers.LabelHandler.MapTextColor(ILabelHandler handler, ILabel label)
+   at Microsoft.Maui.PropertyMapper`2[...].<Add>b__0(IElementHandler h, IElement v)
+   at Microsoft.Maui.Controls.Label.MapTextColor(ILabelHandler handler, Label label, Action`2 baseMethod)
+   at Microsoft.Maui.PropertyMapperExtensions.<>c__DisplayClass1_0`2[...].<ModifyMapping>g__newMethod|0(IElementHandler handler, IElement view)
+   at Microsoft.Maui.PropertyMapper`2[...].<Add>b__0(IElementHandler h, IElement v)
+   at Microsoft.Maui.PropertyMapper.TryUpdatePropertyCore(String key, IElementHandler viewHandler, IElement virtualView)
+   at Microsoft.Maui.PropertyMapper.UpdateProperty(IElementHandler viewHandler, IElement virtualView, String property)
+   at Microsoft.Maui.Handlers.ElementHandler.UpdateValue(String property)
+   at Microsoft.Maui.Controls.BindableObject.SetValueActual(BindableProperty property, BindablePropertyContext context, Object value, Boolean currentlyApplying, SetValueFlags attributes, SetterSpecificity specificity, Boolean silent)
+   at Microsoft.Maui.Controls.BindableObject.SetValueCore(BindableProperty property, Object value, SetValueFlags attributes, SetValuePrivateFlags privateAttributes, SetterSpecificity specificity)
+   at Microsoft.Maui.Controls.BindableObject.SetValue(BindableProperty property, Object value, SetterSpecificity specificity)
+   at Microsoft.Maui.Controls.Setter.Apply(BindableObject target, SetterSpecificity specificity)
+```
+
+(A few generic-type-argument frames collapsed to `[...]` for readability; nothing diagnostic was in
+them. This is the concrete illustration of "B is masked on iOS": the call never gets past
+`UILabel.set_TextColor` to reach `Element.OnBindablePropertySet`/the `HashSet` at all, unlike
+Android where the race wins and the real corruption surfaces instead.)
 </details>
 
 ## Suggested direction
@@ -235,6 +276,6 @@ reproduces against them and this repro makes no claim about them.
 ## Notes
 
 - No DI, no services, no third-party libraries.
-- The app targets one `Label` and one custom `ContentView`; every scenario resets them first.
+- The app targets one `Label`; every scenario resets it first.
 - `MauiXamlInflator` is left at the default (runtime/XamlC) rather than the template's `SourceGen`,
   to keep XAML codegen out of the variables under test.
