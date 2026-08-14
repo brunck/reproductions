@@ -15,6 +15,12 @@ public static class ExceptionReporter
 	static readonly object FileLock = new();
 	static bool _installed;
 
+	/// <summary>
+	/// Raised for exceptions that reached one of the unhandled hooks — i.e. ones no scenario loop
+	/// could catch. <see cref="MainPage"/> uses it to attribute the failure to the run in flight.
+	/// </summary>
+	public static event Action<Exception>? Unhandled;
+
 	public static string LogPath => Path.Combine(FileSystem.AppDataDirectory, "last-crash.txt");
 
 	public static void Install()
@@ -24,18 +30,51 @@ public static class ExceptionReporter
 		_installed = true;
 
 		AppDomain.CurrentDomain.UnhandledException += (_, e) =>
+		{
 			Report("AppDomain.UnhandledException", e.ExceptionObject as Exception);
+			Notify(e.ExceptionObject as Exception);
+		};
 
 		TaskScheduler.UnobservedTaskException += (_, e) =>
 		{
 			Report("TaskScheduler.UnobservedTaskException", e.Exception);
+			Notify(e.Exception);
 			e.SetObserved();
 		};
 
 #if ANDROID
 		Android.Runtime.AndroidEnvironment.UnhandledExceptionRaiser += (_, e) =>
+		{
 			Report("AndroidEnvironment.UnhandledExceptionRaiser", e.Exception);
+			Notify(e.Exception);
+
+			// Scenario B can throw on the UI thread inside the framework's own animation ticker
+			// (AnimationManager.OnFire -> ... -> VisualElement.set_Opacity), which is outside any
+			// app code and therefore uncatchable by the scenario. Left alone that terminates the
+			// process, so pressing B a few times kills the app before it can be pressed again.
+			//
+			// The stack has already been captured above, which is the whole point of the run — so
+			// swallow it and stay alive. Marking an unhandled UI-thread exception handled is only
+			// defensible because this is a repro harness with nothing to corrupt: the element that
+			// threw is discarded at the end of the run either way.
+			e.Handled = true;
+		};
 #endif
+	}
+
+	static void Notify(Exception? exception)
+	{
+		if (exception is null)
+			return;
+
+		try
+		{
+			Unhandled?.Invoke(exception);
+		}
+		catch
+		{
+			// A listener must never turn a captured crash into a second one.
+		}
 	}
 
 	/// <summary>Records an exception. Safe to call from any thread.</summary>

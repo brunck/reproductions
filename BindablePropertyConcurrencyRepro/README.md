@@ -51,10 +51,14 @@ two signatures diagnostic of corruption rather than of a logic error.
 ## Repro Steps
 
 1. Build and deploy to a physical Android device (or a simulator/device for iOS).
-2. Press **A**, then **B**. Each button runs a bounded stress loop (30 s) against a single shared
+2. Press **A**, then **B**. Each button runs a bounded stress loop (10 s) against a freshly built
    `Label` and reports **CLEAN** or **THREW** in the status label, with the caught exception's full
    `ToString()` rendered below it. Failure time is stamped at the throw site, not when the loops
    finish unwinding.
+
+Both buttons can be pressed repeatedly; each press is independent. Every run builds a new target
+element rather than reusing one, because the race leaves the framework's per-element state
+corrupted.
 
 | Button | What it does |
 | --- | --- |
@@ -276,6 +280,11 @@ reproduces against them and this repro makes no claim about them.
 ## Notes
 
 - No DI, no services, no third-party libraries.
-- The app targets one `Label`; every scenario resets it first.
+- Every run builds its own target `Label`; no state is shared between runs.
+- B's throw sometimes lands on the UI thread inside the framework's animation ticker
+  (`AnimationManager.OnFire` → … → `VisualElement.set_Opacity`), which is not inside any app code
+  and so cannot be caught by the scenario. That is reported as **THREW (unhandled)**. Left alone it
+  terminates the process; the harness marks it handled so the app stays usable, but in a real app
+  this is a hard crash.
 - `MauiXamlInflator` is left at the default (runtime/XamlC) rather than the template's `SourceGen`,
   to keep XAML codegen out of the variables under test.

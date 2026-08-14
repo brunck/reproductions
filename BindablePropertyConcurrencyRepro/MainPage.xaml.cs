@@ -4,8 +4,16 @@ namespace BindablePropertyConcurrencyRepro;
 
 public partial class MainPage : ContentPage
 {
-	/// <summary>How long a scenario runs before it is declared clean.</summary>
-	static readonly TimeSpan RunDuration = TimeSpan.FromSeconds(30);
+	/// <summary>
+	/// How long a scenario runs before it is declared clean. Generously above the slowest throw
+	/// observed on any device so far (0.7 s), but short enough that a run which somehow does *not*
+	/// throw cannot spin the loops long enough to matter.
+	/// </summary>
+	static readonly TimeSpan RunDuration = TimeSpan.FromSeconds(10);
+
+	/// <summary>How long past <see cref="RunDuration"/> to wait for the loops to unwind before
+	/// reporting anyway. See the strand note in <see cref="RunAsync"/>.</summary>
+	static readonly TimeSpan StrandGrace = TimeSpan.FromSeconds(2);
 
 	RunContext? _run;
 
@@ -14,6 +22,9 @@ public partial class MainPage : ContentPage
 		InitializeComponent();
 
 		EnvironmentLabel.Text = DescribeEnvironment();
+
+		// Attribute uncatchable throws (see RunContext.FailExternally) to the run in flight.
+		ExceptionReporter.Unhandled += ex => _run?.FailExternally(ex);
 
 		var previous = ExceptionReporter.ReadPreviousReports();
 		if (!string.IsNullOrWhiteSpace(previous))
@@ -38,10 +49,8 @@ public partial class MainPage : ContentPage
 	/// mistake; the complaint is that the framework corrupts its own state when an app makes that
 	/// mistake, and reports it as an exception naming neither the property nor the thread.
 	/// </summary>
-	Task RunScenarioA(RunContext run)
+	static Task RunScenarioA(RunContext run, RaceLabel target)
 	{
-		var target = TargetLabel;
-
 		var alpha = run.Background(token =>
 		{
 			for (var i = 0; !token.IsCancellationRequested; i++)
@@ -71,10 +80,8 @@ public partial class MainPage : ContentPage
 	/// <c>GoToState</c> via <c>Setter.Apply</c>/<c>UnApply</c> writing and clearing
 	/// <c>TextColor</c>, the animation via repeated <c>Opacity</c> writes.
 	/// </summary>
-	Task RunScenarioB(RunContext run)
+	static Task RunScenarioB(RunContext run, RaceLabel target)
 	{
-		var target = TargetLabel;
-
 		var states = run.Background(token =>
 		{
 			for (var i = 0; !token.IsCancellationRequested; i++)
@@ -103,7 +110,7 @@ public partial class MainPage : ContentPage
 		StatusLabel.Text = "report cleared";
 	}
 
-	async Task RunAsync(string name, Func<RunContext, Task> scenario)
+	async Task RunAsync(string name, Func<RunContext, RaceLabel, Task> scenario)
 	{
 		if (_run is not null)
 		{
@@ -111,16 +118,27 @@ public partial class MainPage : ContentPage
 			return;
 		}
 
-		ResetTarget();
+		var target = NewTarget();
+		TargetHost.Content = target;
+
 		DetailLabel.Text = string.Empty;
 		StatusLabel.Text = $"{name}: running up to {RunDuration.TotalSeconds:F0}s…";
 
-		using var run = new RunContext(RunDuration);
+		var run = new RunContext(RunDuration);
 		_run = run;
 
 		try
 		{
-			await scenario(run);
+			var work = scenario(run, target);
+
+			// The scenario can strand. When the throw lands in the animation ticker rather than in
+			// app code, the fade's TaskCompletionSource is never completed and Task.WhenAll never
+			// returns — so report on the run's own schedule rather than waiting for it, and leave
+			// the RunContext undisposed until the stranded loops actually unwind.
+			await Task.WhenAny(work, Task.Delay(RunDuration + StrandGrace));
+			run.Cancel();
+			_ = work.ContinueWith(static (_, state) => ((RunContext)state!).Dispose(), run,
+				TaskScheduler.Default);
 
 			if (run.Failure is null)
 			{
@@ -128,9 +146,13 @@ public partial class MainPage : ContentPage
 			}
 			else
 			{
-				var source = $"{name} threw after {run.FailureAt.TotalSeconds:F2}s";
-				ExceptionReporter.Report(source, run.Failure, run.FailureThreadId);
-				StatusLabel.Text = $"{name}: THREW after {run.FailureAt.TotalSeconds:F2}s — " +
+				var kind = run.FailureWasUnhandled ? "THREW (unhandled)" : "THREW";
+				var source = $"{name} {kind} after {run.FailureAt.TotalSeconds:F2}s";
+
+				if (!run.FailureWasUnhandled)
+					ExceptionReporter.Report(source, run.Failure, run.FailureThreadId);
+
+				StatusLabel.Text = $"{name}: {kind} after {run.FailureAt.TotalSeconds:F2}s — " +
 					$"{run.Failure.GetType().FullName}";
 				DetailLabel.Text = ExceptionReporter.Describe(source, run.Failure, run.FailureThreadId);
 			}
@@ -142,15 +164,44 @@ public partial class MainPage : ContentPage
 		}
 	}
 
-	/// <summary>Puts the shared element back to a known state between scenarios.</summary>
-	void ResetTarget()
+	/// <summary>
+	/// Builds the element a run races against.
+	///
+	/// Every run gets a brand new one, and the previous run's element is dropped. Reusing a single
+	/// element does not work: the race leaves the framework's per-element state corrupted, and a
+	/// reused element behaves nothing like a fresh one — later runs stop throwing and instead
+	/// retain memory until the process is killed. That is a downstream effect of the same defect,
+	/// but it makes the repro read as flaky, so each run starts from a clean element and lets the
+	/// damaged one become garbage.
+	/// </summary>
+	static RaceLabel NewTarget()
 	{
-		TargetLabel.Style = (Style)Resources["RaceStyleA"];
-		TargetLabel.Text = "shared target element";
-		TargetLabel.Opacity = 1;
-		TargetLabel.RaceAlpha = 0;
-		TargetLabel.RaceBeta = 0;
+		var target = new RaceLabel
+		{
+			Text = "target element (fresh for this run)",
+			TextColor = OffColor,
+		};
+
+		// Off/On states for scenario B. Only TextColor differs, so applying them does not force a
+		// platform layout pass; the point is the Setter -> SetValue traffic.
+		var states = new VisualStateGroup { Name = "RaceStates" };
+		states.States.Add(NewState("Off", OffColor));
+		states.States.Add(NewState("On", OnColor));
+
+		VisualStateManager.SetVisualStateGroups(target, new VisualStateGroupList { states });
+
+		return target;
 	}
+
+	static VisualState NewState(string name, Color textColor)
+	{
+		var state = new VisualState { Name = name };
+		state.Setters.Add(new Setter { Property = Label.TextColorProperty, Value = textColor });
+		return state;
+	}
+
+	static readonly Color OffColor = Color.FromArgb("#1E88E5");
+	static readonly Color OnColor = Color.FromArgb("#D81B60");
 
 	static async Task FadeLoopAsync(VisualElement element, CancellationToken token)
 	{

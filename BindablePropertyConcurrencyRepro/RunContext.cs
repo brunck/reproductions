@@ -61,7 +61,36 @@ public sealed class RunContext : IDisposable
 		}
 	}
 
-	public void Cancel() => _cts.Cancel();
+	/// <summary>
+	/// Ends the run. Idempotent, and safe once <see cref="Dispose"/> has run — a run can be
+	/// cancelled from several places (the failure path, the caller's finally, the Stop button) and
+	/// none of them should have to know whether it has already been torn down.
+	/// </summary>
+	public void Cancel()
+	{
+		try
+		{
+			_cts.Cancel();
+		}
+		catch (ObjectDisposedException)
+		{
+		}
+	}
+
+	/// <summary>
+	/// Records a failure that no loop body could catch — scenario B's throw can land in the
+	/// framework's animation ticker, which is not inside any app code. Without this the run would
+	/// wait out its full duration and then wrongly report CLEAN.
+	/// </summary>
+	public void FailExternally(Exception exception)
+	{
+		FailureWasUnhandled = true;
+		Fail(exception);
+	}
+
+	/// <summary>True when <see cref="Failure"/> arrived via an unhandled-exception hook, which has
+	/// already written its own report — so the caller should not write a second one.</summary>
+	public bool FailureWasUnhandled { get; private set; }
 
 	void Fail(Exception exception)
 	{
