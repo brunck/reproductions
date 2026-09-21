@@ -79,8 +79,7 @@ Identical result on net10 (Mono) and net11 (CoreCLR). The illink argument list l
 ## Runtime effect
 Deploy the Debug build to a device and watch the console. Expected `TrimProbe: OK ...`; with the stripped names it
 prints `TrimProbe: FAILED: System.NotSupportedException: The deserialization constructor for type
-'MQTTnet.MqttClientPublishResult' contains parameters with null names ...`. This is exactly what a real MAUI app
-hit on .NET 11 (Datadog-reported), where a Debug-only `JsonSerializer.Serialize(publishResult)` diagnostic threw.
+'MQTTnet.MqttClientPublishResult' contains parameters with null names ...`.
 
 ## Cause
 `Microsoft.iOS.Windows.Sdk/<ver>/tools/msbuild/iOS/Xamarin.iOS.Common.After.targets` target `_RunILLink` invokes
@@ -92,7 +91,7 @@ Same on `dotnet/macios` `main`:
 https://github.com/dotnet/macios/blob/main/msbuild/Xamarin.iOS.Tasks.Windows/Xamarin.iOS.Common.After.targets
 (`_RunILLink`, `Xamarin.MacDev.Tasks.ILLink` element).
 
-## Why this only showed up on .NET 11 in a MAUI app
+## Why MAUI apps only see this on .NET 11
 MAUI's `Microsoft.Maui.Controls.iOS.targets` sets `MtouchLink=None` for Debug when `UseInterpreter=true`, so Debug
 device builds on Mono were never trimmed. Under CoreCLR (`UseInterpreter=false`, and MAUI 11 adds
 `UseMonoRuntime=='true'` to that rule) Debug builds are trimmed, and the missing `KeepMetadata` becomes visible.
