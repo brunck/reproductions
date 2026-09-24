@@ -402,3 +402,5 @@ gcdumps/
 
 # Device log captures taken while investigating a repro
 BindablePropertyConcurrencyRepro/scripts/*.txt
+# iOSWindowsILLinkKeepMetadata local illink outputs
+iOSWindowsILLinkKeepMetadata/local-illink-*/
